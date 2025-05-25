@@ -10,6 +10,8 @@ public class LoginForm extends JDialog {
     private JPasswordField passwordField;
     private JCheckBox showPasswordCheck;
     private JLabel errorLabel;
+    private JButton loginButton;
+    private JButton signUpLink;
     private boolean isMaximized = false;
     private Rectangle normalBounds;
     
@@ -206,18 +208,49 @@ public class LoginForm extends JDialog {
         usernameLabel.setFont(new Font("Arial", Font.PLAIN, 14));
         usernameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         usernameField = createTextField("Enter your username");
+        usernameField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    passwordField.requestFocus();
+                }
+            }
+        });
         
         // Password field
         JLabel passwordLabel = new JLabel("Password");
         passwordLabel.setFont(new Font("Arial", Font.PLAIN, 14));
         passwordLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         passwordField = createPasswordField("Enter your password");
+        passwordField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    handleLogin();
+                }
+            }
+        });
         
         // Show password checkbox
         showPasswordCheck = new JCheckBox("Show Password");
         showPasswordCheck.setFont(new Font("Arial", Font.PLAIN, 12));
         showPasswordCheck.setAlignmentX(Component.CENTER_ALIGNMENT);
         showPasswordCheck.addActionListener(e -> togglePasswordVisibility());
+        showPasswordCheck.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    showPasswordCheck.setSelected(!showPasswordCheck.isSelected());
+                    togglePasswordVisibility();
+                } else if (e.getKeyCode() == KeyEvent.VK_TAB) {
+                    if (e.isShiftDown()) {
+                        passwordField.requestFocus();
+                    } else {
+                        loginButton.requestFocus();
+                    }
+                }
+            }
+        });
         
         // Error label
         errorLabel = new JLabel(" ");
@@ -226,29 +259,33 @@ public class LoginForm extends JDialog {
         errorLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
         // Login button
-        JButton loginButton = new JButton("Login");
+        loginButton = new JButton("Login");
         loginButton.setFont(new Font("Arial", Font.BOLD, 14));
         loginButton.setAlignmentX(Component.CENTER_ALIGNMENT);
         loginButton.setMaximumSize(new Dimension(200, 35));
         loginButton.setBackground(new Color(255, 140, 0));
         loginButton.setForeground(Color.WHITE);
-        loginButton.setFocusPainted(false);
+        loginButton.setFocusPainted(true);
         loginButton.setBorderPainted(false);
         loginButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         loginButton.addActionListener(e -> handleLogin());
-        
-        // Add hover effect to login button
-        loginButton.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) {
-                loginButton.setBackground(new Color(255, 165, 0));
-            }
-            public void mouseExited(MouseEvent e) {
-                loginButton.setBackground(new Color(255, 140, 0));
+        loginButton.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    handleLogin();
+                } else if (e.getKeyCode() == KeyEvent.VK_TAB) {
+                    if (e.isShiftDown()) {
+                        showPasswordCheck.requestFocus();
+                    } else {
+                        signUpLink.requestFocus();
+                    }
+                }
             }
         });
         
         // Sign up link
-        JButton signUpLink = new JButton("Don't have an account? Sign up here");
+        signUpLink = new JButton("Don't have an account? Sign up here");
         signUpLink.setFont(new Font("Arial", Font.PLAIN, 12));
         signUpLink.setBorderPainted(false);
         signUpLink.setContentAreaFilled(false);
@@ -258,6 +295,20 @@ public class LoginForm extends JDialog {
         signUpLink.addActionListener(e -> {
             dispose();
             new SignUpForm((Frame) getParent()).setVisible(true);
+        });
+        signUpLink.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    signUpLink.doClick();
+                } else if (e.getKeyCode() == KeyEvent.VK_TAB) {
+                    if (e.isShiftDown()) {
+                        loginButton.requestFocus();
+                    } else {
+                        usernameField.requestFocus();
+                    }
+                }
+            }
         });
         
         // Add components to right panel
@@ -296,6 +347,9 @@ public class LoginForm extends JDialog {
                 }
             }
         });
+
+        // Set initial focus to username field
+        SwingUtilities.invokeLater(() -> usernameField.requestFocus());
     }
     
     private JTextField createTextField(String placeholder) {

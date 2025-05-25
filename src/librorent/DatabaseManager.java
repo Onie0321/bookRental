@@ -117,7 +117,8 @@ public class DatabaseManager {
                 "format TEXT," +
                 "status TEXT DEFAULT 'Available'," +
                 "copies INTEGER DEFAULT 1," +
-                "fee REAL DEFAULT 10.0" +
+                "fee REAL DEFAULT 10.0," +
+                "late_return_fee REAL DEFAULT 5.0" +
                 ")");
             
             // Check if fee column exists in books table
@@ -127,6 +128,16 @@ public class DatabaseManager {
                 if (e.getMessage().contains("no such column")) {
                     // Add fee column if it doesn't exist
                     stmt.execute("ALTER TABLE books ADD COLUMN fee REAL DEFAULT 10.0");
+                }
+            }
+            
+            // Check if late_return_fee column exists in books table
+            try {
+                stmt.execute("SELECT late_return_fee FROM books LIMIT 1");
+            } catch (SQLException e) {
+                if (e.getMessage().contains("no such column")) {
+                    // Add late_return_fee column if it doesn't exist
+                    stmt.execute("ALTER TABLE books ADD COLUMN late_return_fee REAL DEFAULT 5.0");
                 }
             }
             
@@ -168,13 +179,6 @@ public class DatabaseManager {
                     stmt.execute("ALTER TABLE reservations ADD COLUMN copies INTEGER DEFAULT 1");
                 }
             }
-            
-            // Create settings table
-            stmt.execute("CREATE TABLE IF NOT EXISTS settings (" +
-                "key TEXT PRIMARY KEY," +
-                "value TEXT NOT NULL," +
-                "last_updated TEXT NOT NULL" +
-                ")");
             
             // Create admin user if not exists
             stmt.execute("INSERT OR IGNORE INTO users (username, password, full_name, email, phone, role) " +

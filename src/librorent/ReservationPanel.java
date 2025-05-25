@@ -166,47 +166,55 @@ public class ReservationPanel extends BasePanel {
         };
         
         reservationTable = new JTable(reservationTableModel);
+        reservationTable.setFillsViewportHeight(true);
         reservationTable.setRowHeight(30);
+        reservationTable.setShowGrid(true);
+        reservationTable.setGridColor(new Color(200, 200, 200));
+        reservationTable.getTableHeader().setBackground(new Color(70, 130, 180));
+        reservationTable.getTableHeader().setForeground(Color.WHITE);
+        reservationTable.getTableHeader().setFont(new Font("Arial", Font.BOLD, 12));
+        reservationTable.setSelectionBackground(new Color(230, 240, 250));
+        reservationTable.setSelectionForeground(Color.BLACK);
+        reservationTable.setFont(new Font("Arial", Font.PLAIN, 12));
         
-        // Set column widths
-        reservationTable.getColumnModel().getColumn(0).setPreferredWidth(80);   // Book ID
-        reservationTable.getColumnModel().getColumn(1).setPreferredWidth(200);  // Title
-        reservationTable.getColumnModel().getColumn(2).setPreferredWidth(150);  // Reservation Date
-        reservationTable.getColumnModel().getColumn(3).setPreferredWidth(150);  // Expiry Date
-        reservationTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // Status
-        reservationTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // Reserved Copies
-        reservationTable.getColumnModel().getColumn(6).setPreferredWidth(100);  // Action
-        
-        // Custom table renderer for reservation table
+        // Add custom renderer for tooltips and status colors
         reservationTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 
+                // Set tooltip for all cells
+                if (value != null) {
+                    String text = value.toString();
+                    setToolTipText(text);
+                }
+                
+                // Color status column
+                if (column == 4) { // Status column
+                    String status = value.toString();
+                    switch (status) {
+                        case "Active":
+                            c.setForeground(new Color(46, 204, 113)); // Green
+                            break;
+                        case "Expired":
+                            c.setForeground(new Color(231, 76, 60));  // Red
+                            break;
+                        case "Cancelled":
+                            c.setForeground(new Color(149, 165, 166)); // Gray
+                            break;
+                        default:
+                            c.setForeground(new Color(52, 152, 219)); // Blue
+                    }
+                } else {
+                    c.setForeground(Color.BLACK);
+                }
+                
+                // Set alternating row colors
                 if (!isSelected) {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
-                    
-                    // Color status column
-                    if (column == 4) { // Status column
-                        String status = value.toString();
-                        switch (status) {
-                            case "Active":
-                                c.setForeground(new Color(46, 204, 113)); // Green
-                                break;
-                            case "Expired":
-                                c.setForeground(new Color(231, 76, 60));  // Red
-                                break;
-                            case "Cancelled":
-                                c.setForeground(new Color(149, 165, 166)); // Gray
-                                break;
-                            default:
-                                c.setForeground(new Color(52, 152, 219)); // Blue
-                        }
-                    } else {
-                        c.setForeground(Color.BLACK);
-                    }
                 }
+                
                 return c;
             }
         });
@@ -261,8 +269,64 @@ public class ReservationPanel extends BasePanel {
         }
     }
     
+    private void checkAndUpdateExpiredReservations() {
+        try (Connection conn = DatabaseManager.getInstance().getConnection()) {
+            // Start transaction
+            conn.setAutoCommit(false);
+            
+            try {
+                // Get all active reservations that have expired
+                String query = """
+                    SELECT r.id, r.book_id, r.copies 
+                    FROM reservations r 
+                    WHERE r.status = 'Active' 
+                    AND datetime(r.expiration_date) < datetime('now')
+                """;
+                
+                try (PreparedStatement pstmt = conn.prepareStatement(query)) {
+                    ResultSet rs = pstmt.executeQuery();
+                    
+                    while (rs.next()) {
+                        int reservationId = rs.getInt("id");
+                        int bookId = rs.getInt("book_id");
+                        int copies = rs.getInt("copies");
+                        
+                        // Update reservation status to Expired
+                        try (PreparedStatement updateReservation = conn.prepareStatement(
+                                "UPDATE reservations SET status = 'Expired' WHERE id = ?")) {
+                            updateReservation.setInt(1, reservationId);
+                            updateReservation.executeUpdate();
+                        }
+                        
+                        // Update book copies and status
+                        try (PreparedStatement updateBook = conn.prepareStatement(
+                                "UPDATE books SET copies = copies + ?, status = 'Available' WHERE book_id = ?")) {
+                            updateBook.setInt(1, copies);
+                            updateBook.setInt(2, bookId);
+                            updateBook.executeUpdate();
+                        }
+                    }
+                }
+                
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Error updating expired reservations: " + e.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
     private void loadReservations() {
         if (currentUserId <= 0) return;
+        
+        // First check and update any expired reservations
+        checkAndUpdateExpiredReservations();
         
         reservationTableModel.setRowCount(0);
         try (Connection conn = DatabaseManager.getInstance().getConnection();

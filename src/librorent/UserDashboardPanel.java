@@ -150,13 +150,21 @@ public class UserDashboardPanel extends BasePanel {
         currentRentalsTable.setSelectionForeground(Color.BLACK);
         currentRentalsTable.setFont(new Font("Arial", Font.PLAIN, 12));
 
-        // Add custom renderer for status column
-        currentRentalsTable.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
+        // Add custom renderer for tooltips and status colors
+        currentRentalsTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                
+                // Set tooltip for all cells
                 if (value != null) {
+                    String text = value.toString();
+                    setToolTipText(text);
+                }
+                
+                // Color status column
+                if (column == 5) { // Status column
                     String status = value.toString();
                     switch (status) {
                         case "Active":
@@ -171,7 +179,15 @@ public class UserDashboardPanel extends BasePanel {
                         default:
                             c.setForeground(Color.BLACK);
                     }
+                } else {
+                    c.setForeground(Color.BLACK);
                 }
+                
+                // Set alternating row colors
+                if (!isSelected) {
+                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
+                }
+                
                 return c;
             }
         });

@@ -33,16 +33,32 @@ public class BookListingPanel extends BasePanel {
             }
         };
 
-        // Create table
+        // Create table with custom renderer for tooltips
         bookTable = new JTable(tableModel);
         bookTable.setFillsViewportHeight(true);
         bookTable.setRowHeight(30);
-        bookTable.getTableHeader().setReorderingAllowed(false);
-        bookTable.setShowGrid(false);
-        bookTable.setIntercellSpacing(new Dimension(0, 0));
+        bookTable.setShowGrid(true);
+        bookTable.setGridColor(new Color(200, 200, 200));
         bookTable.getTableHeader().setBackground(new Color(70, 130, 180));
         bookTable.getTableHeader().setForeground(Color.WHITE);
         bookTable.getTableHeader().setFont(new Font("Arial", Font.BOLD, 12));
+        bookTable.setSelectionBackground(new Color(230, 240, 250));
+        bookTable.setSelectionForeground(Color.BLACK);
+        bookTable.setFont(new Font("Arial", Font.PLAIN, 12));
+
+        // Add custom renderer for tooltips
+        bookTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (value != null) {
+                    String text = value.toString();
+                    setToolTipText(text);
+                }
+                return c;
+            }
+        });
 
         // Set column widths
         bookTable.getColumnModel().getColumn(0).setPreferredWidth(80);   // Book ID

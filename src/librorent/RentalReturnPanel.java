@@ -8,6 +8,8 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 public class RentalReturnPanel extends BasePanel {
     private JTable rentalTable;
@@ -19,17 +21,18 @@ public class RentalReturnPanel extends BasePanel {
     private double getLateFeeRate() {
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(
-                 "SELECT value FROM settings WHERE key = 'late_fee_rate'")) {
+                 "SELECT late_return_fee FROM books WHERE book_id = ?")) {
             
+            pstmt.setInt(1, Integer.parseInt(bookIdField.getText().trim()));
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                return Double.parseDouble(rs.getString("value"));
+                return rs.getDouble("late_return_fee");
             }
         } catch (SQLException e) {
             System.err.println("Error getting late fee rate: " + e.getMessage());
         }
-        // Default rate if settings table doesn't exist or rate not found
-        return 10.0;
+        // Default rate if not found
+        return 5.0;
     }
     
     private int getDefaultRentalDuration() {
@@ -285,7 +288,7 @@ public class RentalReturnPanel extends BasePanel {
     
     private void initializeComponents() {
         // Create table model
-        String[] columns = {"Book ID", "Title", "Author", "ISBN", "Format", "Genre", "Copies", "Status", "Fee", "Total Rented"};
+        String[] columns = {"Book ID", "Title", "Author", "ISBN", "Format", "Genre", "Copies", "Status", "Rental Fee", "Late Fee", "Total Rented"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -311,7 +314,8 @@ public class RentalReturnPanel extends BasePanel {
         rentalTable.getColumnModel().getColumn(6).setPreferredWidth(60);   // Copies
         rentalTable.getColumnModel().getColumn(7).setPreferredWidth(100);  // Status
         rentalTable.getColumnModel().getColumn(8).setPreferredWidth(80);   // Fee
-        rentalTable.getColumnModel().getColumn(9).setPreferredWidth(100);  // Total Rented
+        rentalTable.getColumnModel().getColumn(9).setPreferredWidth(80);   // Late Fee
+        rentalTable.getColumnModel().getColumn(10).setPreferredWidth(100); // Total Rented
     }
     
     private void loadData() {
@@ -344,6 +348,7 @@ public class RentalReturnPanel extends BasePanel {
                         rs.getInt("copies"),
                         rs.getString("status"),
                         String.format("₱%.2f", rs.getDouble("fee")),
+                        String.format("₱%.2f", rs.getDouble("late_return_fee")),
                         rs.getInt("total_rented")
                     };
                     tableModel.addRow(row);
@@ -385,10 +390,10 @@ public class RentalReturnPanel extends BasePanel {
             System.out.println("Starting rental process for book ID: " + bookId + " by user: " + currentUserId);
             
             // Check if book exists and has available copies
-            String bookTitle = "";
-            String bookAuthor = "";
-            double bookFee = 0.0;
-            int totalCopies = 0;
+            final String bookTitle;
+            final String bookAuthor;
+            final double bookFee;
+            final int totalCopies;
             try (PreparedStatement pstmt = conn.prepareStatement(
                     "SELECT title, author, copies, status, fee FROM books WHERE book_id = ?")) {
                 pstmt.setInt(1, Integer.parseInt(bookId));
@@ -406,118 +411,176 @@ public class RentalReturnPanel extends BasePanel {
                 bookAuthor = rs.getString("author");
                 bookFee = rs.getDouble("fee");
                 totalCopies = rs.getInt("copies");
-                System.out.println("Book is available for rental. Current copies: " + totalCopies + ", Fee: " + bookFee);
+                System.out.println("Book is available for rental. Current copies: " + totalCopies + ", Fee per day: " + bookFee);
             }
             
-            // Ask for number of copies to rent
-            String copiesInput = JOptionPane.showInputDialog(this,
-                "Enter number of copies to rent (1-" + totalCopies + "):",
-                "Select Copies",
-                JOptionPane.QUESTION_MESSAGE);
+            // Create rental duration selection dialog
+            JDialog durationDialog = new JDialog((Frame)SwingUtilities.getWindowAncestor(this), "Select Rental Duration", true);
+            durationDialog.setLayout(new BorderLayout(10, 10));
             
-            if (copiesInput == null) {
-                conn.rollback();
-                return; // User cancelled
-            }
+            JPanel formPanel = new JPanel(new GridBagLayout());
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            gbc.insets = new Insets(5, 5, 5, 5);
             
-            int copiesToRent;
-            try {
-                copiesToRent = Integer.parseInt(copiesInput);
-                if (copiesToRent < 1 || copiesToRent > totalCopies) {
-                    throw new NumberFormatException();
+            // Book details
+            gbc.gridx = 0; gbc.gridy = 0;
+            formPanel.add(new JLabel("Book Title:"), gbc);
+            gbc.gridx = 1;
+            formPanel.add(new JLabel(bookTitle), gbc);
+            
+            gbc.gridx = 0; gbc.gridy = 1;
+            formPanel.add(new JLabel("Author:"), gbc);
+            gbc.gridx = 1;
+            formPanel.add(new JLabel(bookAuthor), gbc);
+            
+            gbc.gridx = 0; gbc.gridy = 2;
+            formPanel.add(new JLabel("Fee per day:"), gbc);
+            gbc.gridx = 1;
+            formPanel.add(new JLabel(String.format("₱%.2f", bookFee)), gbc);
+            
+            // Rental duration selection
+            gbc.gridx = 0; gbc.gridy = 3;
+            formPanel.add(new JLabel("Rental Duration (days):"), gbc);
+            gbc.gridx = 1;
+            JSpinner durationSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 30, 1));
+            formPanel.add(durationSpinner, gbc);
+            
+            // Total fee display
+            gbc.gridx = 0; gbc.gridy = 4;
+            formPanel.add(new JLabel("Total Fee:"), gbc);
+            gbc.gridx = 1;
+            JLabel totalFeeLabel = new JLabel(String.format("₱%.2f", bookFee));
+            formPanel.add(totalFeeLabel, gbc);
+            
+            // Update total fee when duration changes
+            durationSpinner.addChangeListener(e -> {
+                int days = (Integer)durationSpinner.getValue();
+                double total = days * bookFee;
+                totalFeeLabel.setText(String.format("₱%.2f", total));
+            });
+            
+            // Copies selection
+            gbc.gridx = 0; gbc.gridy = 5;
+            formPanel.add(new JLabel("Number of Copies:"), gbc);
+            gbc.gridx = 1;
+            JSpinner copiesSpinner = new JSpinner(new SpinnerNumberModel(1, 1, totalCopies, 1));
+            formPanel.add(copiesSpinner, gbc);
+            
+            // Final total display
+            gbc.gridx = 0; gbc.gridy = 6;
+            formPanel.add(new JLabel("Final Total:"), gbc);
+            gbc.gridx = 1;
+            JLabel finalTotalLabel = new JLabel(String.format("₱%.2f", bookFee));
+            formPanel.add(finalTotalLabel, gbc);
+            
+            // Update final total when either duration or copies change
+            ChangeListener updateTotalListener = e -> {
+                int days = (Integer)durationSpinner.getValue();
+                int copies = (Integer)copiesSpinner.getValue();
+                double total = days * bookFee * copies;
+                finalTotalLabel.setText(String.format("₱%.2f", total));
+            };
+            durationSpinner.addChangeListener(updateTotalListener);
+            copiesSpinner.addChangeListener(updateTotalListener);
+            
+            // Buttons
+            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            JButton confirmButton = new JButton("Confirm Rental");
+            JButton cancelButton = new JButton("Cancel");
+            
+            confirmButton.addActionListener(e -> {
+                int days = (Integer)durationSpinner.getValue();
+                int copies = (Integer)copiesSpinner.getValue();
+                double totalFee = days * bookFee * copies;
+                
+                // Calculate dates
+                LocalDateTime now = LocalDateTime.now();
+                LocalDateTime dueDate = now.plusDays(days);
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                
+                // Show confirmation dialog
+                String message = String.format(
+                    "Rental Details:\n" +
+                    "Book: %s\n" +
+                    "Author: %s\n" +
+                    "Duration: %d days\n" +
+                    "Copies: %d\n" +
+                    "Fee per day: ₱%.2f\n" +
+                    "Total Fee: ₱%.2f\n" +
+                    "Due Date: %s\n\n" +
+                    "IMPORTANT: Please pay the total fee of ₱%.2f in cash at the front desk before proceeding with the rental.\n\n" +
+                    "Do you want to proceed with the rental?",
+                    bookTitle, bookAuthor, days, copies, bookFee, totalFee,
+                    dueDate.format(formatter), totalFee);
+                
+                int choice = JOptionPane.showConfirmDialog(durationDialog,
+                    message,
+                    "Confirm Rental",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE);
+                
+                if (choice == JOptionPane.YES_OPTION) {
+                    try {
+                        // Insert rental records for each copy
+                        for (int i = 0; i < copies; i++) {
+                            try (PreparedStatement pstmt = conn.prepareStatement(
+                                    "INSERT INTO rentals (user_id, book_id, rental_date, due_date) VALUES (?, ?, ?, ?)")) {
+                                pstmt.setInt(1, currentUserId);
+                                pstmt.setInt(2, Integer.parseInt(bookId));
+                                pstmt.setString(3, now.format(formatter));
+                                pstmt.setString(4, dueDate.format(formatter));
+                                pstmt.executeUpdate();
+                            }
+                        }
+                        
+                        // Update book status and decrease available copies
+                        try (PreparedStatement pstmt = conn.prepareStatement(
+                                "UPDATE books SET copies = copies - ?, status = CASE WHEN copies - ? = 0 THEN 'Rented' ELSE 'Available' END WHERE book_id = ?")) {
+                            pstmt.setInt(1, copies);
+                            pstmt.setInt(2, copies);
+                            pstmt.setInt(3, Integer.parseInt(bookId));
+                            pstmt.executeUpdate();
+                        }
+                        
+                        conn.commit();
+                        durationDialog.dispose();
+                        
+                        // Clear input field
+                        bookIdField.setText("");
+                        
+                        // Refresh rental history
+                        loadData();
+                        
+                        // Refresh User Dashboard panels
+                        refreshUserDashboard();
+                        
+                        JOptionPane.showMessageDialog(this,
+                            String.format("Book rented successfully!\nCopies rented: %d\nDuration: %d days\nDue date: %s\nTotal fee: ₱%.2f", 
+                                copies, days, dueDate.format(formatter), totalFee),
+                            "Success",
+                            JOptionPane.INFORMATION_MESSAGE);
+                            
+                    } catch (SQLException ex) {
+                        ex.printStackTrace();
+                        JOptionPane.showMessageDialog(durationDialog,
+                            "Error processing rental: " + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                    }
                 }
-            } catch (NumberFormatException e) {
-                conn.rollback();
-                JOptionPane.showMessageDialog(this,
-                    "Please enter a valid number between 1 and " + totalCopies,
-                    "Invalid Input",
-                    JOptionPane.ERROR_MESSAGE);
-                return;
-            }
+            });
             
-            // Calculate dates with default rental duration
-            LocalDateTime now = LocalDateTime.now();
-            int durationInSeconds = getDefaultRentalDuration();
-            LocalDateTime dueDate = now.plusSeconds(durationInSeconds);
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            cancelButton.addActionListener(e -> durationDialog.dispose());
             
-            // Calculate total fee
-            double totalFee = bookFee * copiesToRent;
+            buttonPanel.add(cancelButton);
+            buttonPanel.add(confirmButton);
             
-            // Format duration details
-            int days = durationInSeconds / (24 * 3600);
-            int hours = (durationInSeconds % (24 * 3600)) / 3600;
-            int minutes = (durationInSeconds % 3600) / 60;
-            int seconds = durationInSeconds % 60;
-            
-            String durationDetails = String.format("%d days, %d hours, %d minutes, %d seconds", 
-                days, hours, minutes, seconds);
-            
-            // Show confirmation dialog with book details and fee
-            String message = String.format(
-                "Book Details:\n" +
-                "Title: %s\n" +
-                "Author: %s\n" +
-                "Total Copies Available: %d\n" +
-                "Copies to Rent: %d\n" +
-                "Fee per Copy: ₱%.2f\n" +
-                "Total Fee: ₱%.2f\n" +
-                "Rental Duration: %s\n" +
-                "Due Date: %s\n\n" +
-                "IMPORTANT: Please pay the total fee of ₱%.2f in cash at the front desk before proceeding with the rental.\n\n" +
-                "Do you want to proceed with the rental?",
-                bookTitle, bookAuthor, totalCopies, copiesToRent, bookFee, totalFee, 
-                durationDetails, dueDate.format(formatter), totalFee);
-            
-            int choice = JOptionPane.showConfirmDialog(this,
-                message,
-                "Confirm Rental",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE);
-            
-            if (choice != JOptionPane.YES_OPTION) {
-                conn.rollback();
-                return;
-            }
-            
-            // Insert rental records for each copy
-            for (int i = 0; i < copiesToRent; i++) {
-                try (PreparedStatement pstmt = conn.prepareStatement(
-                        "INSERT INTO rentals (user_id, book_id, rental_date, due_date) VALUES (?, ?, ?, ?)")) {
-                    pstmt.setInt(1, currentUserId);
-                    pstmt.setInt(2, Integer.parseInt(bookId));
-                    pstmt.setString(3, now.format(formatter));
-                    pstmt.setString(4, dueDate.format(formatter));
-                    pstmt.executeUpdate();
-                }
-            }
-            
-            // Update book status and decrease available copies
-            try (PreparedStatement pstmt = conn.prepareStatement(
-                    "UPDATE books SET copies = copies - ?, status = CASE WHEN copies - ? = 0 THEN 'Rented' ELSE 'Available' END WHERE book_id = ?")) {
-                pstmt.setInt(1, copiesToRent);
-                pstmt.setInt(2, copiesToRent);
-                pstmt.setInt(3, Integer.parseInt(bookId));
-                pstmt.executeUpdate();
-            }
-            
-            conn.commit();
-            System.out.println("Transaction committed successfully");
-            
-            // Clear input field
-            bookIdField.setText("");
-            
-            // Refresh rental history
-            loadData();
-            
-            // Refresh User Dashboard panels
-            refreshUserDashboard();
-            
-            JOptionPane.showMessageDialog(this,
-                String.format("Book rented successfully!\nCopies rented: %d\nDue date: %s\nTotal fee: ₱%.2f", 
-                    copiesToRent, dueDate.format(formatter), totalFee),
-                "Success",
-                JOptionPane.INFORMATION_MESSAGE);
+            durationDialog.add(formPanel, BorderLayout.CENTER);
+            durationDialog.add(buttonPanel, BorderLayout.SOUTH);
+            durationDialog.pack();
+            durationDialog.setLocationRelativeTo(this);
+            durationDialog.setVisible(true);
             
         } catch (SQLException e) {
             e.printStackTrace();
@@ -534,6 +597,7 @@ public class RentalReturnPanel extends BasePanel {
                 "Please log in to return books",
                 "Authentication Required",
                 JOptionPane.WARNING_MESSAGE);
+            returnBookIdField.requestFocus();
             return;
         }
         
@@ -553,7 +617,7 @@ public class RentalReturnPanel extends BasePanel {
             // Get all active rentals for this book
             java.util.List<Object[]> activeRentals = new java.util.ArrayList<>();
             try (PreparedStatement pstmt = conn.prepareStatement(
-                    "SELECT r.id, r.due_date, b.title, b.author, b.copies, b.book_id " +
+                    "SELECT r.id, r.due_date, b.title, b.author, b.copies, b.book_id, b.late_return_fee " +
                     "FROM rentals r " +
                     "JOIN books b ON r.book_id = b.book_id " +
                     "WHERE r.book_id = ? AND r.user_id = ? AND r.return_date IS NULL " +
@@ -578,9 +642,13 @@ public class RentalReturnPanel extends BasePanel {
                     double lateFee = 0.0;
                     LocalDateTime returnDate = LocalDateTime.now();
                     if (returnDate.isAfter(dueDate)) {
-                        long minutesLate = java.time.Duration.between(dueDate, returnDate).toMinutes();
-                        double dailyFee = getLateFeeRate();
-                        lateFee = (minutesLate / 1440.0) * dailyFee;
+                        // Calculate days late using ChronoUnit.DAYS
+                        long daysLate = java.time.temporal.ChronoUnit.DAYS.between(dueDate.toLocalDate(), returnDate.toLocalDate());
+                        double dailyLateFee = rs.getDouble("late_return_fee");
+                        lateFee = daysLate * dailyLateFee;
+                        System.out.println("Debug - Rental Selection - Days Late: " + daysLate);
+                        System.out.println("Debug - Rental Selection - Daily Late Fee: " + dailyLateFee);
+                        System.out.println("Debug - Rental Selection - Total Late Fee: " + lateFee);
                     }
                     
                     activeRentals.add(new Object[]{
@@ -598,6 +666,17 @@ public class RentalReturnPanel extends BasePanel {
             if (activeRentals.size() == 1) {
                 processReturn(conn, (int)activeRentals.get(0)[0], (String)activeRentals.get(0)[1], 
                     (String)activeRentals.get(0)[2], (String)activeRentals.get(0)[3], (double)activeRentals.get(0)[4]);
+                
+                // Show single success message for single return
+                String successMessage = (double)activeRentals.get(0)[4] > 0 ? 
+                    String.format("Book returned successfully!\nLate fee: ₱%.2f\n\nIMPORTANT: Please pay the late fee in cash at the front desk.", 
+                        (double)activeRentals.get(0)[4]) :
+                    "Book returned successfully!";
+                
+                JOptionPane.showMessageDialog(this,
+                    successMessage,
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
             
@@ -637,6 +716,7 @@ public class RentalReturnPanel extends BasePanel {
                 JLabel titleLabel2 = new JLabel("<html><b>" + rental[1] + "</b></html>");
                 JLabel dueDateLabel = new JLabel("Due: " + rental[3]);
                 JLabel lateFeeLabel = new JLabel(String.format("Late Fee: ₱%.2f", rental[4]));
+                lateFeeLabel.setForeground((double)rental[4] > 0 ? new Color(231, 76, 60) : new Color(46, 204, 113));
                 
                 rentalPanel.add(checkbox);
                 rentalPanel.add(Box.createVerticalStrut(5));
@@ -661,11 +741,13 @@ public class RentalReturnPanel extends BasePanel {
                 // Get selected rentals
                 java.util.List<Object[]> selectedRentals = new java.util.ArrayList<>();
                 double totalLateFee = 0.0;
+                int selectedCount = 0;
                 
                 for (int i = 0; i < checkboxes.size(); i++) {
                     if (checkboxes.get(i).isSelected()) {
                         selectedRentals.add(activeRentals.get(i));
                         totalLateFee += (double)activeRentals.get(i)[4];
+                        selectedCount++;
                     }
                 }
                 
@@ -677,21 +759,18 @@ public class RentalReturnPanel extends BasePanel {
                     return;
                 }
                 
-                // Show confirmation dialog
+                // Show confirmation dialog with summary
                 StringBuilder message = new StringBuilder();
-                message.append("Selected Rentals:\n\n");
-                
-                for (Object[] rental : selectedRentals) {
-                    message.append(String.format("Title: %s\nDue: %s\nLate Fee: ₱%.2f\n\n",
-                        rental[1], rental[3], rental[4]));
-                }
+                message.append("Return Summary:\n\n");
+                message.append(String.format("Book: %s\n", selectedRentals.get(0)[1]));
+                message.append(String.format("Number of copies to return: %d\n", selectedCount));
                 
                 if (totalLateFee > 0) {
-                    message.append(String.format("Total Late Fee: ₱%.2f\n\n", totalLateFee));
-                    message.append("IMPORTANT: Please pay the total late fee in cash at the front desk before proceeding with the returns.\n\n");
+                    message.append(String.format("\nTotal Late Fee: ₱%.2f\n", totalLateFee));
+                    message.append("\nIMPORTANT: Please pay the total late fee in cash at the front desk before proceeding with the returns.\n");
                 }
                 
-                message.append("Do you want to proceed with returning these books?");
+                message.append("\nDo you want to proceed with returning these books?");
                 
                 int choice = JOptionPane.showConfirmDialog(this,
                     message.toString(),
@@ -706,6 +785,17 @@ public class RentalReturnPanel extends BasePanel {
                             processReturn(conn, (int)rental[0], (String)rental[1], 
                                 (String)rental[2], (String)rental[3], (double)rental[4]);
                         }
+                        
+                        // Show single success message
+                        String successMessage = totalLateFee > 0 ? 
+                            String.format("Books returned successfully!\nNumber of copies returned: %d\nTotal late fee: ₱%.2f\n\nIMPORTANT: Please pay the late fee in cash at the front desk.", 
+                                selectedCount, totalLateFee) :
+                            String.format("Books returned successfully!\nNumber of copies returned: %d", selectedCount);
+                        
+                        JOptionPane.showMessageDialog(this,
+                            successMessage,
+                            "Success",
+                            JOptionPane.INFORMATION_MESSAGE);
                         
                         // Close the selection dialog
                         Window window = SwingUtilities.getWindowAncestor(selectionPanel);
@@ -751,10 +841,35 @@ public class RentalReturnPanel extends BasePanel {
         }
         
         LocalDateTime returnDate = LocalDateTime.now();
+        System.out.println("Debug - Due Date: " + dueDate);
+        System.out.println("Debug - Return Date: " + returnDate);
+        
         if (returnDate.isAfter(dueDate)) {
-            long minutesLate = java.time.Duration.between(dueDate, returnDate).toMinutes();
-            double dailyFee = getLateFeeRate(); // Get current late fee rate
-            lateFee = (minutesLate / 1440.0) * dailyFee;
+            // Calculate days late using ChronoUnit.DAYS
+            long daysLate = java.time.temporal.ChronoUnit.DAYS.between(dueDate.toLocalDate(), returnDate.toLocalDate());
+            System.out.println("Debug - Days Late: " + daysLate);
+            
+            // Get the late fee rate from the books table using the rental's book_id
+            try (PreparedStatement feeStmt = conn.prepareStatement(
+                    "SELECT b.late_return_fee FROM books b " +
+                    "JOIN rentals r ON b.book_id = r.book_id " +
+                    "WHERE r.id = ?")) {
+                feeStmt.setInt(1, rentalId);
+                ResultSet feeRs = feeStmt.executeQuery();
+                if (feeRs.next()) {
+                    double dailyFee = feeRs.getDouble("late_return_fee");
+                    System.out.println("Debug - Daily Late Fee Rate: " + dailyFee);
+                    lateFee = daysLate * dailyFee;
+                    System.out.println("Debug - Total Late Fee: " + lateFee);
+                } else {
+                    System.out.println("Debug - No late fee rate found, using default rate of 5.0");
+                    lateFee = daysLate * 5.0; // Default rate if not found
+                    System.out.println("Debug - Total Late Fee (with default rate): " + lateFee);
+                }
+            }
+        } else {
+            System.out.println("Debug - Book returned on time, no late fee");
+            lateFee = 0.0;
         }
         
         // Update rental record with return date and late fee
@@ -764,16 +879,20 @@ public class RentalReturnPanel extends BasePanel {
             pstmt.setDouble(2, lateFee);
             pstmt.setInt(3, rentalId);
             pstmt.executeUpdate();
+            System.out.println("Debug - Updated rental record with late fee: " + lateFee);
         }
         
         // Update book status and increase available copies
         try (PreparedStatement pstmt = conn.prepareStatement(
-                "UPDATE books SET copies = copies + 1, status = 'Available' WHERE book_id = ?")) {
-            pstmt.setInt(1, Integer.parseInt(bookIdField.getText().trim()));
+                "UPDATE books SET copies = copies + 1, status = 'Available' WHERE book_id = " +
+                "(SELECT book_id FROM rentals WHERE id = ?)")) {
+            pstmt.setInt(1, rentalId);
             pstmt.executeUpdate();
+            System.out.println("Debug - Updated book status and copies");
         }
         
         conn.commit();
+        System.out.println("Debug - Transaction committed");
         
         // Clear input field
         returnBookIdField.setText("");
@@ -783,15 +902,6 @@ public class RentalReturnPanel extends BasePanel {
         
         // Refresh User Dashboard panels
         refreshUserDashboard();
-        
-        String successMessage = lateFee > 0 ? 
-            String.format("Book returned successfully!\nLate fee: ₱%.2f\n\nIMPORTANT: Please pay the late fee in cash at the front desk.", lateFee) :
-            "Book returned successfully!";
-        
-        JOptionPane.showMessageDialog(this,
-            successMessage,
-            "Success",
-            JOptionPane.INFORMATION_MESSAGE);
     }
     
     private void searchBooks(String searchTerm) {
@@ -827,6 +937,7 @@ public class RentalReturnPanel extends BasePanel {
                         rs.getInt("copies"),
                         rs.getString("status"),
                         String.format("₱%.2f", rs.getDouble("fee")),
+                        String.format("₱%.2f", rs.getDouble("late_return_fee")),
                         rs.getInt("total_rented")
                     };
                     tableModel.addRow(row);

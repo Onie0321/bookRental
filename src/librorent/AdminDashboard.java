@@ -116,7 +116,6 @@ public class AdminDashboard extends JFrame {
         contentPanel.add(createUserManagementPanel(), "USER_MANAGEMENT");
         contentPanel.add(createRentalManagementPanel(), "RENTAL_MANAGEMENT");
         contentPanel.add(new InventoryPanel(), "INVENTORY");
-        contentPanel.add(createSettingsPanel(), "SETTINGS");
         
         // Show dashboard by default
         cardLayout.show(contentPanel, "DASHBOARD");
@@ -151,8 +150,7 @@ public class AdminDashboard extends JFrame {
             "📚 Book Management",
             "👤 User Management",
             "📖 Rental Management",
-            "📦 Inventory",
-            "⚙️ Settings"
+            "📦 Inventory"
         };
         
         for (String item : menuItems) {
@@ -209,9 +207,6 @@ public class AdminDashboard extends JFrame {
                     break;
                 case "📦 Inventory":
                     cardName = "INVENTORY";
-                    break;
-                case "⚙️ Settings":
-                    cardName = "SETTINGS";
                     break;
                 default:
                     cardName = "DASHBOARD";
@@ -463,11 +458,11 @@ public class AdminDashboard extends JFrame {
         searchPanel.add(searchButton);
         
         // Create table model
-        String[] columns = {"Book ID", "Title", "Author", "ISBN", "Format", "Genre", "Copies", "Fee", "Status", "Action"};
+        String[] columns = {"Book ID", "Title", "Author", "ISBN", "Format", "Genre", "Copies", "Rental Fee", "Late Return Fee", "Status", "Action"};
         bookModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 9; // Only action column is editable
+                return column == 10; // Only action column is editable
             }
         };
         
@@ -488,9 +483,10 @@ public class AdminDashboard extends JFrame {
         bookTable.getColumnModel().getColumn(4).setPreferredWidth(100);  // Format
         bookTable.getColumnModel().getColumn(5).setPreferredWidth(100);  // Genre
         bookTable.getColumnModel().getColumn(6).setPreferredWidth(60);   // Copies
-        bookTable.getColumnModel().getColumn(7).setPreferredWidth(80);   // Fee
-        bookTable.getColumnModel().getColumn(8).setPreferredWidth(100);  // Status
-        bookTable.getColumnModel().getColumn(9).setPreferredWidth(100);  // Action
+        bookTable.getColumnModel().getColumn(7).setPreferredWidth(80);   // Rental Fee
+        bookTable.getColumnModel().getColumn(8).setPreferredWidth(100);  // Late Return Fee
+        bookTable.getColumnModel().getColumn(9).setPreferredWidth(100);  // Status
+        bookTable.getColumnModel().getColumn(10).setPreferredWidth(100);  // Action
         
         JScrollPane scrollPane = new JScrollPane(bookTable);
         
@@ -620,6 +616,7 @@ public class AdminDashboard extends JFrame {
         JComboBox<String> formatCombo = new JComboBox<>(new String[]{"Physical", "E-Book"});
         JSpinner copiesSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 100, 1));
         JSpinner feeSpinner = new JSpinner(new SpinnerNumberModel(10.0, 10.0, 1000.0, 10.0));
+        JSpinner lateReturnFeeSpinner = new JSpinner(new SpinnerNumberModel(5.0, 0.0, 1000.0, 5.0));
         
         gbc.gridx = 0; gbc.gridy = 0;
         formPanel.add(new JLabel("Title:"), gbc);
@@ -652,15 +649,20 @@ public class AdminDashboard extends JFrame {
         formPanel.add(copiesSpinner, gbc);
         
         gbc.gridx = 0; gbc.gridy = 6;
-        formPanel.add(new JLabel("Fee (₱):"), gbc);
+        formPanel.add(new JLabel("Rental Fee (₱):"), gbc);
         gbc.gridx = 1;
         formPanel.add(feeSpinner, gbc);
+        
+        gbc.gridx = 0; gbc.gridy = 7;
+        formPanel.add(new JLabel("Late Return Fee (₱):"), gbc);
+        gbc.gridx = 1;
+        formPanel.add(lateReturnFeeSpinner, gbc);
         
         JButton saveButton = new JButton("Save");
         saveButton.addActionListener(ev -> {
             try (Connection conn = DatabaseManager.getInstance().getConnection();
                  PreparedStatement pstmt = conn.prepareStatement(
-                     "INSERT INTO books (title, author, isbn, genre, format, copies, fee, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
+                     "INSERT INTO books (title, author, isbn, genre, format, copies, fee, late_return_fee, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
                 
                 pstmt.setString(1, titleField.getText());
                 pstmt.setString(2, authorField.getText());
@@ -669,7 +671,8 @@ public class AdminDashboard extends JFrame {
                 pstmt.setString(5, formatCombo.getSelectedItem().toString());
                 pstmt.setInt(6, (Integer)copiesSpinner.getValue());
                 pstmt.setDouble(7, (Double)feeSpinner.getValue());
-                pstmt.setString(8, "Available");
+                pstmt.setDouble(8, (Double)lateReturnFeeSpinner.getValue());
+                pstmt.setString(9, "Available");
                 pstmt.executeUpdate();
                 
                 dialog.dispose();
@@ -1019,6 +1022,10 @@ public class AdminDashboard extends JFrame {
                 if (rs.wasNull()) {
                     fee = 10.0; // Default fee if null
                 }
+                double lateReturnFee = rs.getDouble("late_return_fee");
+                if (rs.wasNull()) {
+                    lateReturnFee = 5.0; // Default late return fee if null
+                }
                 Object[] row = {
                     "B" + rs.getInt("book_id"),
                     rs.getString("title"),
@@ -1028,6 +1035,7 @@ public class AdminDashboard extends JFrame {
                     rs.getString("genre"),
                     rs.getInt("copies"),
                     "₱" + fee,
+                    "₱" + lateReturnFee,
                     rs.getString("status"),
                     "Edit"
                 };
@@ -1035,7 +1043,7 @@ public class AdminDashboard extends JFrame {
             }
             
             // Set up the edit button column
-            TableColumn editColumn = bookTable.getColumnModel().getColumn(9);
+            TableColumn editColumn = bookTable.getColumnModel().getColumn(10);
             editColumn.setCellRenderer(new ButtonRenderer());
             editColumn.setCellEditor(new ButtonEditor(bookTable));
             
@@ -1049,29 +1057,22 @@ public class AdminDashboard extends JFrame {
     }
     
     // Custom table cell renderer for action buttons
-    private class ButtonRenderer extends JPanel implements TableCellRenderer {
-        private JButton editButton;
-        
+    private class ButtonRenderer extends JButton implements TableCellRenderer {
         public ButtonRenderer() {
-            setLayout(new FlowLayout(FlowLayout.CENTER, 5, 0));
-            editButton = new JButton("Edit");
-            editButton.setBackground(new Color(52, 152, 219)); // Blue
-            editButton.setForeground(Color.WHITE);
-            editButton.setFocusPainted(false);
-            editButton.setBorderPainted(false);
-            add(editButton);
+            setOpaque(true);
         }
         
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
+            setText((value == null) ? "" : value.toString());
             return this;
         }
     }
     
     // Custom table cell editor for action buttons
     private class ButtonEditor extends DefaultCellEditor {
-        private JButton button;
+        protected JButton button;
         private String label;
         private boolean isPushed;
         private JTable table;
@@ -1096,27 +1097,34 @@ public class AdminDashboard extends JFrame {
         @Override
         public Object getCellEditorValue() {
             if (isPushed) {
-                editBook();
+                int row = table.getSelectedRow();
+                String bookId = table.getValueAt(row, 0).toString();
+                showEditBookDialog(bookId);
             }
             isPushed = false;
             return label;
         }
         
-        private void editBook() {
-            int row = table.getSelectedRow();
-            if (row != -1) {
-                String bookIdStr = (String)table.getValueAt(row, 0);
-                int bookId = Integer.parseInt(bookIdStr.substring(1)); // Remove 'B' prefix
-                String title = (String) table.getValueAt(row, 1);
-                String author = (String) table.getValueAt(row, 2);
-                String isbn = (String) table.getValueAt(row, 3);
-                String format = (String) table.getValueAt(row, 4);
-                String genre = (String) table.getValueAt(row, 5);
-                int copies = (int) table.getValueAt(row, 6);
-                double fee = Double.parseDouble(((String)table.getValueAt(row, 7)).substring(1)); // Remove '₱' prefix
-                String status = (String) table.getValueAt(row, 8);
-                
-                JDialog dialog = new JDialog((Frame)SwingUtilities.getWindowAncestor(table), "Edit Book", true);
+        @Override
+        public boolean stopCellEditing() {
+            isPushed = false;
+            return super.stopCellEditing();
+        }
+    }
+    
+    private void showEditBookDialog(String bookId) {
+        // Remove 'B' prefix from book ID
+        bookId = bookId.substring(1);
+        
+        try (Connection conn = DatabaseManager.getInstance().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "SELECT * FROM books WHERE book_id = ?")) {
+            
+            pstmt.setInt(1, Integer.parseInt(bookId));
+            ResultSet rs = pstmt.executeQuery();
+            
+            if (rs.next()) {
+                JDialog dialog = new JDialog(this, "Edit Book", true);
                 dialog.setLayout(new BorderLayout(10, 10));
                 
                 JPanel formPanel = new JPanel(new GridBagLayout());
@@ -1124,124 +1132,145 @@ public class AdminDashboard extends JFrame {
                 gbc.fill = GridBagConstraints.HORIZONTAL;
                 gbc.insets = new Insets(5, 5, 5, 5);
                 
-                JTextField titleField = new JTextField(title, 20);
-                JTextField authorField = new JTextField(author, 20);
-                JTextField isbnField = new JTextField(isbn, 20);
-                JComboBox<String> genreCombo = new JComboBox<>(new String[]{"Fiction", "Non-Fiction", "Mystery", "Science Fiction", "Romance", "Biography"});
-                genreCombo.setSelectedItem(genre);
-                JComboBox<String> formatCombo = new JComboBox<>(new String[]{"Physical", "E-Book"});
-                formatCombo.setSelectedItem(format);
-                JSpinner copiesSpinner = new JSpinner(new SpinnerNumberModel(copies, 0, 1000, 1));
-                JSpinner feeSpinner = new JSpinner(new SpinnerNumberModel(fee, 10.0, 1000.0, 10.0));
-                JComboBox<String> statusCombo = new JComboBox<>(new String[]{"Available", "Unavailable"});
-                statusCombo.setSelectedItem(status);
-                
+                // Title
                 gbc.gridx = 0; gbc.gridy = 0;
                 formPanel.add(new JLabel("Title:"), gbc);
                 gbc.gridx = 1;
+                JTextField titleField = new JTextField(rs.getString("title"), 20);
                 formPanel.add(titleField, gbc);
                 
+                // Author
                 gbc.gridx = 0; gbc.gridy = 1;
                 formPanel.add(new JLabel("Author:"), gbc);
                 gbc.gridx = 1;
+                JTextField authorField = new JTextField(rs.getString("author"), 20);
                 formPanel.add(authorField, gbc);
                 
+                // ISBN
                 gbc.gridx = 0; gbc.gridy = 2;
                 formPanel.add(new JLabel("ISBN:"), gbc);
                 gbc.gridx = 1;
+                JTextField isbnField = new JTextField(rs.getString("isbn"), 20);
                 formPanel.add(isbnField, gbc);
                 
+                // Genre
                 gbc.gridx = 0; gbc.gridy = 3;
                 formPanel.add(new JLabel("Genre:"), gbc);
                 gbc.gridx = 1;
-                formPanel.add(genreCombo, gbc);
+                JTextField genreField = new JTextField(rs.getString("genre"), 20);
+                formPanel.add(genreField, gbc);
                 
+                // Format
                 gbc.gridx = 0; gbc.gridy = 4;
                 formPanel.add(new JLabel("Format:"), gbc);
                 gbc.gridx = 1;
+                String[] formats = {"Hardcover", "Paperback", "E-Book", "Audiobook"};
+                JComboBox<String> formatCombo = new JComboBox<>(formats);
+                formatCombo.setSelectedItem(rs.getString("format"));
                 formPanel.add(formatCombo, gbc);
                 
+                // Copies
                 gbc.gridx = 0; gbc.gridy = 5;
                 formPanel.add(new JLabel("Copies:"), gbc);
                 gbc.gridx = 1;
+                JSpinner copiesSpinner = new JSpinner(new SpinnerNumberModel(rs.getInt("copies"), 0, 1000, 1));
                 formPanel.add(copiesSpinner, gbc);
                 
+                // Rental Fee
                 gbc.gridx = 0; gbc.gridy = 6;
-                formPanel.add(new JLabel("Fee (₱):"), gbc);
+                formPanel.add(new JLabel("Rental Fee (₱):"), gbc);
                 gbc.gridx = 1;
+                JSpinner feeSpinner = new JSpinner(new SpinnerNumberModel(rs.getDouble("fee"), 0.0, 1000.0, 10.0));
                 formPanel.add(feeSpinner, gbc);
                 
+                // Late Return Fee
                 gbc.gridx = 0; gbc.gridy = 7;
+                formPanel.add(new JLabel("Late Return Fee (₱):"), gbc);
+                gbc.gridx = 1;
+                JSpinner lateFeeSpinner = new JSpinner(new SpinnerNumberModel(rs.getDouble("late_return_fee"), 0.0, 1000.0, 5.0));
+                formPanel.add(lateFeeSpinner, gbc);
+                
+                // Status
+                gbc.gridx = 0; gbc.gridy = 8;
                 formPanel.add(new JLabel("Status:"), gbc);
                 gbc.gridx = 1;
+                String[] statuses = {"Available", "Rented", "Maintenance"};
+                JComboBox<String> statusCombo = new JComboBox<>(statuses);
+                statusCombo.setSelectedItem(rs.getString("status"));
                 formPanel.add(statusCombo, gbc);
                 
                 JButton saveButton = new JButton("Save");
+                JButton cancelButton = new JButton("Cancel");
+                JButton deleteButton = new JButton("Delete");
+                
                 saveButton.addActionListener(e -> {
-                    try (Connection conn = DatabaseManager.getInstance().getConnection();
-                         PreparedStatement pstmt = conn.prepareStatement(
-                             "UPDATE books SET title = ?, author = ?, isbn = ?, genre = ?, format = ?, copies = ?, fee = ?, status = ? WHERE book_id = ?")) {
-                        
-                        pstmt.setString(1, titleField.getText());
-                        pstmt.setString(2, authorField.getText());
-                        pstmt.setString(3, isbnField.getText());
-                        pstmt.setString(4, (String)genreCombo.getSelectedItem());
-                        pstmt.setString(5, formatCombo.getSelectedItem().toString());
-                        pstmt.setInt(6, (Integer)copiesSpinner.getValue());
-                        pstmt.setDouble(7, (Double)feeSpinner.getValue());
-                        pstmt.setString(8, (String)statusCombo.getSelectedItem());
-                        pstmt.setInt(9, bookId);
-                        pstmt.executeUpdate();
-                        
-                        dialog.dispose();
-                        
-                        // Refresh all related components
-                        loadBooks(bookModel);
-                        updateBookStats(totalBooksLabel, totalCopiesLabel, totalAvailableLabel);
-                        loadRentals(); // Refresh rentals to show updated book information
-                        
-                        JOptionPane.showMessageDialog(dialog,
-                            "Book updated successfully!",
-                            "Success",
-                            JOptionPane.INFORMATION_MESSAGE);
+                    try {
+                        // Update book in database
+                        try (PreparedStatement updateStmt = conn.prepareStatement(
+                                "UPDATE books SET title = ?, author = ?, isbn = ?, genre = ?, " +
+                                "format = ?, copies = ?, fee = ?, late_return_fee = ?, status = ? " +
+                                "WHERE book_id = ?")) {
+                            
+                            updateStmt.setString(1, titleField.getText());
+                            updateStmt.setString(2, authorField.getText());
+                            updateStmt.setString(3, isbnField.getText());
+                            updateStmt.setString(4, genreField.getText());
+                            updateStmt.setString(5, (String)formatCombo.getSelectedItem());
+                            updateStmt.setInt(6, (Integer)copiesSpinner.getValue());
+                            updateStmt.setDouble(7, (Double)feeSpinner.getValue());
+                            updateStmt.setDouble(8, (Double)lateFeeSpinner.getValue());
+                            updateStmt.setString(9, (String)statusCombo.getSelectedItem());
+                            updateStmt.setInt(10, Integer.parseInt(bookId));
+                            
+                            updateStmt.executeUpdate();
+                            
+                            // Refresh book list
+                            loadBooks(bookModel);
+                            
+                            dialog.dispose();
+                            
+                            JOptionPane.showMessageDialog(this,
+                                "Book updated successfully!",
+                                "Success",
+                                JOptionPane.INFORMATION_MESSAGE);
+                        }
                     } catch (SQLException ex) {
                         ex.printStackTrace();
-                        JOptionPane.showMessageDialog(dialog,
+                        JOptionPane.showMessageDialog(this,
                             "Error updating book: " + ex.getMessage(),
                             "Error",
                             JOptionPane.ERROR_MESSAGE);
                     }
                 });
                 
-                JButton deleteButton = new JButton("Delete");
                 deleteButton.addActionListener(e -> {
-                    int confirm = JOptionPane.showConfirmDialog(dialog,
+                    int choice = JOptionPane.showConfirmDialog(this,
                         "Are you sure you want to delete this book?",
                         "Confirm Delete",
-                        JOptionPane.YES_NO_OPTION);
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
                     
-                    if (confirm == JOptionPane.YES_OPTION) {
-                        try (Connection conn = DatabaseManager.getInstance().getConnection();
-                             PreparedStatement pstmt = conn.prepareStatement(
-                                 "DELETE FROM books WHERE book_id = ?")) {
-                            
-                            pstmt.setInt(1, bookId);
-                            pstmt.executeUpdate();
-                            
-                            dialog.dispose();
-                            
-                            // Refresh all related components
-                            loadBooks(bookModel);
-                            updateBookStats(totalBooksLabel, totalCopiesLabel, totalAvailableLabel);
-                            loadRentals(); // Refresh rentals to show updated book information
-                            
-                            JOptionPane.showMessageDialog(dialog,
-                                "Book deleted successfully!",
-                                "Success",
-                                JOptionPane.INFORMATION_MESSAGE);
+                    if (choice == JOptionPane.YES_OPTION) {
+                        try {
+                            // Delete book from database
+                            try (PreparedStatement deleteStmt = conn.prepareStatement(
+                                    "DELETE FROM books WHERE book_id = ?")) {
+                                deleteStmt.setInt(1, Integer.parseInt(bookId));
+                                deleteStmt.executeUpdate();
+                                
+                                // Refresh book list
+                                loadBooks(bookModel);
+                                
+                                dialog.dispose();
+                                
+                                JOptionPane.showMessageDialog(this,
+                                    "Book deleted successfully!",
+                                    "Success",
+                                    JOptionPane.INFORMATION_MESSAGE);
+                            }
                         } catch (SQLException ex) {
                             ex.printStackTrace();
-                            JOptionPane.showMessageDialog(dialog,
+                            JOptionPane.showMessageDialog(this,
                                 "Error deleting book: " + ex.getMessage(),
                                 "Error",
                                 JOptionPane.ERROR_MESSAGE);
@@ -1249,7 +1278,6 @@ public class AdminDashboard extends JFrame {
                     }
                 });
                 
-                JButton cancelButton = new JButton("Cancel");
                 cancelButton.addActionListener(e -> dialog.dispose());
                 
                 JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -1263,6 +1291,12 @@ public class AdminDashboard extends JFrame {
                 dialog.setLocationRelativeTo(table);
                 dialog.setVisible(true);
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Error loading book details: " + e.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -1723,10 +1757,10 @@ public class AdminDashboard extends JFrame {
                  SELECT r.*, b.title, u.username, 
                         CASE 
                             WHEN r.return_date IS NULL AND r.due_date < datetime('now') 
-                            THEN (julianday('now') - julianday(r.due_date)) * ?
+                            THEN (julianday('now') - julianday(r.due_date) - 1) * ?
                             WHEN r.return_date > r.due_date
-                            THEN (julianday(r.return_date) - julianday(r.due_date)) * ?
-                            ELSE r.late_fee 
+                            THEN (julianday(r.return_date) - julianday(r.due_date) - 1) * ?
+                            ELSE 0
                         END as calculated_fee
                  FROM rentals r 
                  JOIN books b ON r.book_id = b.book_id 

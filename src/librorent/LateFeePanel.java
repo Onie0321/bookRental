@@ -217,9 +217,15 @@ public class LateFeePanel extends BasePanel {
                         }
                         
                         if (returnDate.isAfter(dueDate)) {
-                            long minutesLate = java.time.Duration.between(dueDate, returnDate).toMinutes();
+                            // Calculate days late, starting from the day after due date
+                            long daysLate = java.time.Duration.between(dueDate, returnDate).toDays();
+                            if (daysLate > 0) {
+                                daysLate--; // Subtract one day to start counting from the day after due date
+                            }
                             double dailyFee = getLateFeeRate();
-                            lateFee = (minutesLate / 1440.0) * dailyFee;
+                            lateFee = daysLate * dailyFee;
+                        } else {
+                            lateFee = 0.0;
                         }
                     }
                     
