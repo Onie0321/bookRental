@@ -1114,13 +1114,13 @@ public class AdminDashboard extends JFrame {
     
     private void showEditBookDialog(String bookId) {
         // Remove 'B' prefix from book ID
-        bookId = bookId.substring(1);
+        final String numericBookId = bookId.substring(1);
         
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement pstmt = conn.prepareStatement(
                  "SELECT * FROM books WHERE book_id = ?")) {
             
-            pstmt.setInt(1, Integer.parseInt(bookId));
+            pstmt.setInt(1, Integer.parseInt(numericBookId));
             ResultSet rs = pstmt.executeQuery();
             
             if (rs.next()) {
@@ -1210,7 +1210,7 @@ public class AdminDashboard extends JFrame {
                                 "UPDATE books SET title = ?, author = ?, isbn = ?, genre = ?, " +
                                 "format = ?, copies = ?, fee = ?, late_return_fee = ?, status = ? " +
                                 "WHERE book_id = ?")) {
-                            
+                        
                             updateStmt.setString(1, titleField.getText());
                             updateStmt.setString(2, authorField.getText());
                             updateStmt.setString(3, isbnField.getText());
@@ -1220,19 +1220,19 @@ public class AdminDashboard extends JFrame {
                             updateStmt.setDouble(7, (Double)feeSpinner.getValue());
                             updateStmt.setDouble(8, (Double)lateFeeSpinner.getValue());
                             updateStmt.setString(9, (String)statusCombo.getSelectedItem());
-                            updateStmt.setInt(10, Integer.parseInt(bookId));
+                            updateStmt.setInt(10, Integer.parseInt(numericBookId));
                             
                             updateStmt.executeUpdate();
                             
                             // Refresh book list
-                            loadBooks(bookModel);
-                            
+                        loadBooks(bookModel);
+                        
                             dialog.dispose();
                             
                             JOptionPane.showMessageDialog(this,
-                                "Book updated successfully!",
-                                "Success",
-                                JOptionPane.INFORMATION_MESSAGE);
+                            "Book updated successfully!",
+                            "Success",
+                            JOptionPane.INFORMATION_MESSAGE);
                         }
                     } catch (SQLException ex) {
                         ex.printStackTrace();
@@ -1254,19 +1254,19 @@ public class AdminDashboard extends JFrame {
                         try {
                             // Delete book from database
                             try (PreparedStatement deleteStmt = conn.prepareStatement(
-                                    "DELETE FROM books WHERE book_id = ?")) {
-                                deleteStmt.setInt(1, Integer.parseInt(bookId));
+                                 "DELETE FROM books WHERE book_id = ?")) {
+                                deleteStmt.setInt(1, Integer.parseInt(numericBookId));
                                 deleteStmt.executeUpdate();
-                                
+                            
                                 // Refresh book list
                                 loadBooks(bookModel);
-                                
-                                dialog.dispose();
-                                
+                            
+                            dialog.dispose();
+                            
                                 JOptionPane.showMessageDialog(this,
-                                    "Book deleted successfully!",
-                                    "Success",
-                                    JOptionPane.INFORMATION_MESSAGE);
+                                "Book deleted successfully!",
+                                "Success",
+                                JOptionPane.INFORMATION_MESSAGE);
                             }
                         } catch (SQLException ex) {
                             ex.printStackTrace();
@@ -1288,7 +1288,7 @@ public class AdminDashboard extends JFrame {
                 dialog.add(formPanel, BorderLayout.CENTER);
                 dialog.add(buttonPanel, BorderLayout.SOUTH);
                 dialog.pack();
-                dialog.setLocationRelativeTo(table);
+                dialog.setLocationRelativeTo(this);
                 dialog.setVisible(true);
             }
         } catch (SQLException e) {

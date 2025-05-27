@@ -189,26 +189,26 @@ public class ReservationPanel extends BasePanel {
                     String text = value.toString();
                     setToolTipText(text);
                 }
-                
-                // Color status column
-                if (column == 4) { // Status column
-                    String status = value.toString();
-                    switch (status) {
-                        case "Active":
-                            c.setForeground(new Color(46, 204, 113)); // Green
-                            break;
-                        case "Expired":
-                            c.setForeground(new Color(231, 76, 60));  // Red
-                            break;
-                        case "Cancelled":
-                            c.setForeground(new Color(149, 165, 166)); // Gray
-                            break;
-                        default:
-                            c.setForeground(new Color(52, 152, 219)); // Blue
+                    
+                    // Color status column
+                    if (column == 4) { // Status column
+                        String status = value.toString();
+                        switch (status) {
+                            case "Active":
+                                c.setForeground(new Color(46, 204, 113)); // Green
+                                break;
+                            case "Expired":
+                                c.setForeground(new Color(231, 76, 60));  // Red
+                                break;
+                            case "Cancelled":
+                                c.setForeground(new Color(149, 165, 166)); // Gray
+                                break;
+                            default:
+                                c.setForeground(new Color(52, 152, 219)); // Blue
+                        }
+                    } else {
+                        c.setForeground(Color.BLACK);
                     }
-                } else {
-                    c.setForeground(Color.BLACK);
-                }
                 
                 // Set alternating row colors
                 if (!isSelected) {

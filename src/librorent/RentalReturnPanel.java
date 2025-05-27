@@ -500,66 +500,66 @@ public class RentalReturnPanel extends BasePanel {
                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
                 
                 // Show confirmation dialog
-                String message = String.format(
+            String message = String.format(
                     "Rental Details:\n" +
                     "Book: %s\n" +
-                    "Author: %s\n" +
+                "Author: %s\n" +
                     "Duration: %d days\n" +
                     "Copies: %d\n" +
                     "Fee per day: ₱%.2f\n" +
-                    "Total Fee: ₱%.2f\n" +
-                    "Due Date: %s\n\n" +
-                    "IMPORTANT: Please pay the total fee of ₱%.2f in cash at the front desk before proceeding with the rental.\n\n" +
-                    "Do you want to proceed with the rental?",
+                "Total Fee: ₱%.2f\n" +
+                "Due Date: %s\n\n" +
+                "IMPORTANT: Please pay the total fee of ₱%.2f in cash at the front desk before proceeding with the rental.\n\n" +
+                "Do you want to proceed with the rental?",
                     bookTitle, bookAuthor, days, copies, bookFee, totalFee,
                     dueDate.format(formatter), totalFee);
-                
+            
                 int choice = JOptionPane.showConfirmDialog(durationDialog,
-                    message,
-                    "Confirm Rental",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.QUESTION_MESSAGE);
-                
+                message,
+                "Confirm Rental",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+            
                 if (choice == JOptionPane.YES_OPTION) {
                     try {
-                        // Insert rental records for each copy
+            // Insert rental records for each copy
                         for (int i = 0; i < copies; i++) {
-                            try (PreparedStatement pstmt = conn.prepareStatement(
-                                    "INSERT INTO rentals (user_id, book_id, rental_date, due_date) VALUES (?, ?, ?, ?)")) {
-                                pstmt.setInt(1, currentUserId);
-                                pstmt.setInt(2, Integer.parseInt(bookId));
-                                pstmt.setString(3, now.format(formatter));
-                                pstmt.setString(4, dueDate.format(formatter));
-                                pstmt.executeUpdate();
-                            }
-                        }
-                        
-                        // Update book status and decrease available copies
-                        try (PreparedStatement pstmt = conn.prepareStatement(
-                                "UPDATE books SET copies = copies - ?, status = CASE WHEN copies - ? = 0 THEN 'Rented' ELSE 'Available' END WHERE book_id = ?")) {
+                try (PreparedStatement pstmt = conn.prepareStatement(
+                        "INSERT INTO rentals (user_id, book_id, rental_date, due_date) VALUES (?, ?, ?, ?)")) {
+                    pstmt.setInt(1, currentUserId);
+                    pstmt.setInt(2, Integer.parseInt(bookId));
+                    pstmt.setString(3, now.format(formatter));
+                    pstmt.setString(4, dueDate.format(formatter));
+                    pstmt.executeUpdate();
+                }
+            }
+            
+            // Update book status and decrease available copies
+            try (PreparedStatement pstmt = conn.prepareStatement(
+                    "UPDATE books SET copies = copies - ?, status = CASE WHEN copies - ? = 0 THEN 'Rented' ELSE 'Available' END WHERE book_id = ?")) {
                             pstmt.setInt(1, copies);
                             pstmt.setInt(2, copies);
-                            pstmt.setInt(3, Integer.parseInt(bookId));
-                            pstmt.executeUpdate();
-                        }
-                        
-                        conn.commit();
+                pstmt.setInt(3, Integer.parseInt(bookId));
+                pstmt.executeUpdate();
+            }
+            
+            conn.commit();
                         durationDialog.dispose();
-                        
-                        // Clear input field
-                        bookIdField.setText("");
-                        
-                        // Refresh rental history
-                        loadData();
-                        
-                        // Refresh User Dashboard panels
-                        refreshUserDashboard();
-                        
-                        JOptionPane.showMessageDialog(this,
+            
+            // Clear input field
+            bookIdField.setText("");
+            
+            // Refresh rental history
+            loadData();
+            
+            // Refresh User Dashboard panels
+            refreshUserDashboard();
+            
+            JOptionPane.showMessageDialog(this,
                             String.format("Book rented successfully!\nCopies rented: %d\nDuration: %d days\nDue date: %s\nTotal fee: ₱%.2f", 
                                 copies, days, dueDate.format(formatter), totalFee),
-                            "Success",
-                            JOptionPane.INFORMATION_MESSAGE);
+                "Success",
+                JOptionPane.INFORMATION_MESSAGE);
                             
                     } catch (SQLException ex) {
                         ex.printStackTrace();
@@ -614,6 +614,28 @@ public class RentalReturnPanel extends BasePanel {
             // Start transaction
             conn.setAutoCommit(false);
             
+            // Check if book is physical and current time is within business hours
+            try (PreparedStatement pstmt = conn.prepareStatement(
+                    "SELECT format FROM books WHERE book_id = ?")) {
+                pstmt.setInt(1, Integer.parseInt(bookId));
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    String format = rs.getString("format");
+                    if (format.equalsIgnoreCase("Physical")) {
+                        LocalDateTime now = LocalDateTime.now();
+                        int hour = now.getHour();
+                        if (hour < 8 || hour >= 17) {
+                            JOptionPane.showMessageDialog(this,
+                                "Physical books can only be returned between 8:00 AM and 5:00 PM.\n" +
+                                "Please return during business hours.",
+                                "Return Time Restriction",
+                                JOptionPane.WARNING_MESSAGE);
+                            return;
+                        }
+                    }
+                }
+            }
+            
             // Get all active rentals for this book
             java.util.List<Object[]> activeRentals = new java.util.ArrayList<>();
             try (PreparedStatement pstmt = conn.prepareStatement(
@@ -664,19 +686,43 @@ public class RentalReturnPanel extends BasePanel {
             
             // If there's only one rental, proceed with it
             if (activeRentals.size() == 1) {
-                processReturn(conn, (int)activeRentals.get(0)[0], (String)activeRentals.get(0)[1], 
-                    (String)activeRentals.get(0)[2], (String)activeRentals.get(0)[3], (double)activeRentals.get(0)[4]);
+                Object[] rental = activeRentals.get(0);
+                double lateFee = (double)rental[4];
                 
-                // Show single success message for single return
-                String successMessage = (double)activeRentals.get(0)[4] > 0 ? 
-                    String.format("Book returned successfully!\nLate fee: ₱%.2f\n\nIMPORTANT: Please pay the late fee in cash at the front desk.", 
-                        (double)activeRentals.get(0)[4]) :
-                    "Book returned successfully!";
+                // Show confirmation dialog for single return
+                StringBuilder message = new StringBuilder();
+                message.append("Return Summary:\n\n");
+                message.append(String.format("Book: %s\n", rental[1]));
+                message.append(String.format("Due Date: %s\n", rental[3]));
                 
-                JOptionPane.showMessageDialog(this,
-                    successMessage,
-                    "Success",
-                    JOptionPane.INFORMATION_MESSAGE);
+                if (lateFee > 0) {
+                    message.append(String.format("\nLate Fee: ₱%.2f\n", lateFee));
+                    message.append("\nIMPORTANT: Please pay the late fee in cash at the front desk before proceeding with the return.\n");
+                }
+                
+                message.append("\nDo you want to proceed with returning this book?");
+                
+                int choice = JOptionPane.showConfirmDialog(this,
+                    message.toString(),
+                    "Confirm Return",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE);
+                
+                if (choice == JOptionPane.YES_OPTION) {
+                    processReturn(conn, (int)rental[0], (String)rental[1], 
+                        (String)rental[2], (String)rental[3], lateFee);
+                    
+                    // Show single success message for single return
+                    String successMessage = lateFee > 0 ? 
+                        String.format("Book returned successfully!\nLate fee: ₱%.2f\n\nIMPORTANT: Please pay the late fee in cash at the front desk.", 
+                            lateFee) :
+                        "Book returned successfully!";
+                    
+                    JOptionPane.showMessageDialog(this,
+                        successMessage,
+                        "Success",
+                        JOptionPane.INFORMATION_MESSAGE);
+                }
                 return;
             }
             
