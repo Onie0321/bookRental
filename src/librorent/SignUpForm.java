@@ -49,7 +49,9 @@ public class SignUpForm extends JDialog {
         JButton minimizeBtn = createTitleBarButton("─");
         minimizeBtn.addActionListener(e -> {
             setVisible(false);
-            setState(Frame.ICONIFIED);
+            if (getOwner() instanceof Frame) {
+                ((Frame)getOwner()).setExtendedState(Frame.ICONIFIED);
+            }
             setVisible(true);
         });
         

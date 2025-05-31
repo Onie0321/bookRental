@@ -500,20 +500,20 @@ public class RentalReturnPanel extends BasePanel {
                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
                 
                 // Show confirmation dialog
-            String message = String.format(
-                    "Rental Details:\n" +
-                    "Book: %s\n" +
-                "Author: %s\n" +
-                    "Duration: %d days\n" +
-                    "Copies: %d\n" +
-                    "Fee per day: ₱%.2f\n" +
-                "Total Fee: ₱%.2f\n" +
-                "Due Date: %s\n\n" +
-                "IMPORTANT: Please pay the total fee of ₱%.2f in cash at the front desk before proceeding with the rental.\n\n" +
-                "Do you want to proceed with the rental?",
-                    bookTitle, bookAuthor, days, copies, bookFee, totalFee,
-                    dueDate.format(formatter), totalFee);
-            
+                String message = String.format(
+                        "Rental Details:\n" +
+                        "Book: %s\n" +
+                    "Author: %s\n" +
+                        "Duration: %d days\n" +
+                        "Copies: %d\n" +
+                        "Fee per day: ₱%.2f\n" +
+                    "Total Fee: ₱%.2f\n" +
+                    "Due Date: %s\n\n" +
+                    "IMPORTANT: Please pay the total fee of ₱%.2f in cash at the front desk before proceeding with the rental.\n\n" +
+                    "Do you want to proceed with the rental?",
+                        bookTitle, bookAuthor, days, copies, bookFee, totalFee,
+                        dueDate.format(formatter), totalFee);
+                
                 int choice = JOptionPane.showConfirmDialog(durationDialog,
                 message,
                 "Confirm Rental",
@@ -522,44 +522,43 @@ public class RentalReturnPanel extends BasePanel {
             
                 if (choice == JOptionPane.YES_OPTION) {
                     try {
-            // Insert rental records for each copy
+                        // Insert rental records for each copy
                         for (int i = 0; i < copies; i++) {
-                try (PreparedStatement pstmt = conn.prepareStatement(
-                        "INSERT INTO rentals (user_id, book_id, rental_date, due_date) VALUES (?, ?, ?, ?)")) {
-                    pstmt.setInt(1, currentUserId);
-                    pstmt.setInt(2, Integer.parseInt(bookId));
-                    pstmt.setString(3, now.format(formatter));
-                    pstmt.setString(4, dueDate.format(formatter));
-                    pstmt.executeUpdate();
-                }
-            }
-            
-            // Update book status and decrease available copies
-            try (PreparedStatement pstmt = conn.prepareStatement(
-                    "UPDATE books SET copies = copies - ?, status = CASE WHEN copies - ? = 0 THEN 'Rented' ELSE 'Available' END WHERE book_id = ?")) {
+                            try (PreparedStatement pstmt = conn.prepareStatement(
+                                    "INSERT INTO rentals (user_id, book_id, rental_date, due_date, status) VALUES (?, ?, ?, ?, 'Pending')")) {
+                                pstmt.setInt(1, currentUserId);
+                                pstmt.setInt(2, Integer.parseInt(bookId));
+                                pstmt.setString(3, now.format(formatter));
+                                pstmt.setString(4, dueDate.format(formatter));
+                                pstmt.executeUpdate();
+                            }
+                        }
+                        
+                        // Update book status and decrease available copies
+                        try (PreparedStatement pstmt = conn.prepareStatement(
+                                "UPDATE books SET copies = copies - ?, status = CASE WHEN copies - ? = 0 THEN 'Unavailable' ELSE 'Available' END WHERE book_id = ?")) {
                             pstmt.setInt(1, copies);
                             pstmt.setInt(2, copies);
-                pstmt.setInt(3, Integer.parseInt(bookId));
-                pstmt.executeUpdate();
-            }
-            
-            conn.commit();
+                            pstmt.setInt(3, Integer.parseInt(bookId));
+                            pstmt.executeUpdate();
+                        }
+                        
+                        conn.commit();
                         durationDialog.dispose();
-            
-            // Clear input field
-            bookIdField.setText("");
-            
-            // Refresh rental history
-            loadData();
-            
-            // Refresh User Dashboard panels
-            refreshUserDashboard();
-            
-            JOptionPane.showMessageDialog(this,
-                            String.format("Book rented successfully!\nCopies rented: %d\nDuration: %d days\nDue date: %s\nTotal fee: ₱%.2f", 
-                                copies, days, dueDate.format(formatter), totalFee),
-                "Success",
-                JOptionPane.INFORMATION_MESSAGE);
+                        
+                        // Clear input field
+                        bookIdField.setText("");
+                        
+                        // Refresh rental history
+                        loadData();
+                        
+                        // Refresh User Dashboard panels
+                        refreshUserDashboard();
+                        
+                        JOptionPane.showMessageDialog(this,
+                            "Rental request submitted successfully!\nPlease wait for admin approval.",
+                            "Success",
+                            JOptionPane.INFORMATION_MESSAGE);
                             
                     } catch (SQLException ex) {
                         ex.printStackTrace();
@@ -711,17 +710,17 @@ public class RentalReturnPanel extends BasePanel {
                 if (choice == JOptionPane.YES_OPTION) {
                     processReturn(conn, (int)rental[0], (String)rental[1], 
                         (String)rental[2], (String)rental[3], lateFee);
-                    
-                    // Show single success message for single return
+                
+                // Show single success message for single return
                     String successMessage = lateFee > 0 ? 
-                        String.format("Book returned successfully!\nLate fee: ₱%.2f\n\nIMPORTANT: Please pay the late fee in cash at the front desk.", 
+                    String.format("Book returned successfully!\nLate fee: ₱%.2f\n\nIMPORTANT: Please pay the late fee in cash at the front desk.", 
                             lateFee) :
-                        "Book returned successfully!";
-                    
-                    JOptionPane.showMessageDialog(this,
-                        successMessage,
-                        "Success",
-                        JOptionPane.INFORMATION_MESSAGE);
+                    "Book returned successfully!";
+                
+                JOptionPane.showMessageDialog(this,
+                    successMessage,
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
                 }
                 return;
             }
@@ -876,65 +875,22 @@ public class RentalReturnPanel extends BasePanel {
         }
     }
     
-    private void processReturn(Connection conn, int rentalId, String bookTitle, String bookAuthor, 
-            String dueDateStr, double lateFee) throws SQLException {
-        // Recalculate late fee at the time of return to ensure it's current
-        LocalDateTime dueDate;
-        try {
-            dueDate = LocalDateTime.parse(dueDateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        } catch (Exception e) {
-            dueDate = LocalDate.parse(dueDateStr).atTime(23, 59, 59);
-        }
-        
-        LocalDateTime returnDate = LocalDateTime.now();
-        System.out.println("Debug - Due Date: " + dueDate);
-        System.out.println("Debug - Return Date: " + returnDate);
-        
-        if (returnDate.isAfter(dueDate)) {
-            // Calculate days late using ChronoUnit.DAYS
-            long daysLate = java.time.temporal.ChronoUnit.DAYS.between(dueDate.toLocalDate(), returnDate.toLocalDate());
-            System.out.println("Debug - Days Late: " + daysLate);
-            
-            // Get the late fee rate from the books table using the rental's book_id
-            try (PreparedStatement feeStmt = conn.prepareStatement(
-                    "SELECT b.late_return_fee FROM books b " +
-                    "JOIN rentals r ON b.book_id = r.book_id " +
-                    "WHERE r.id = ?")) {
-                feeStmt.setInt(1, rentalId);
-                ResultSet feeRs = feeStmt.executeQuery();
-                if (feeRs.next()) {
-                    double dailyFee = feeRs.getDouble("late_return_fee");
-                    System.out.println("Debug - Daily Late Fee Rate: " + dailyFee);
-                    lateFee = daysLate * dailyFee;
-                    System.out.println("Debug - Total Late Fee: " + lateFee);
-                } else {
-                    System.out.println("Debug - No late fee rate found, using default rate of 5.0");
-                    lateFee = daysLate * 5.0; // Default rate if not found
-                    System.out.println("Debug - Total Late Fee (with default rate): " + lateFee);
-                }
-            }
-        } else {
-            System.out.println("Debug - Book returned on time, no late fee");
-            lateFee = 0.0;
-        }
-        
-        // Update rental record with return date and late fee
+    private void processReturn(Connection conn, int rentalId, String bookTitle, String bookAuthor, String dueDate, double lateFee) throws SQLException {
+        // Update rental record with return date and status
         try (PreparedStatement pstmt = conn.prepareStatement(
-                "UPDATE rentals SET return_date = ?, late_fee = ? WHERE id = ?")) {
-            pstmt.setString(1, returnDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-            pstmt.setDouble(2, lateFee);
-            pstmt.setInt(3, rentalId);
+                "UPDATE rentals SET return_date = datetime('now'), status = 'Returned' WHERE id = ?")) {
+            pstmt.setInt(1, rentalId);
             pstmt.executeUpdate();
-            System.out.println("Debug - Updated rental record with late fee: " + lateFee);
+            System.out.println("Debug - Updated rental record");
         }
         
-        // Update book status and increase available copies
+        // Update book status to Available
         try (PreparedStatement pstmt = conn.prepareStatement(
                 "UPDATE books SET copies = copies + 1, status = 'Available' WHERE book_id = " +
                 "(SELECT book_id FROM rentals WHERE id = ?)")) {
             pstmt.setInt(1, rentalId);
             pstmt.executeUpdate();
-            System.out.println("Debug - Updated book status and copies");
+            System.out.println("Debug - Updated book status to Available");
         }
         
         conn.commit();

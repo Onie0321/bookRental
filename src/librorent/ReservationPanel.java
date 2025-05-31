@@ -81,6 +81,18 @@ public class ReservationPanel extends BasePanel {
         searchPanel.add(filterLabel);
         searchPanel.add(filterCombo);
         
+        // Add refresh button
+        JButton refreshButton = new JButton("Refresh");
+        refreshButton.setBackground(new Color(70, 130, 180));
+        refreshButton.setForeground(Color.WHITE);
+        refreshButton.setFocusPainted(false);
+        refreshButton.setBorderPainted(false);
+        refreshButton.addActionListener(e -> {
+            loadBooks();
+            loadReservations();
+        });
+        searchPanel.add(refreshButton);
+        
         // Book table
         String[] bookColumns = {"ID", "Title", "Author", "Format", "Status", "Available Copies", "Action"};
         bookTableModel = new DefaultTableModel(bookColumns, 0) {
@@ -491,6 +503,21 @@ public class ReservationPanel extends BasePanel {
     
     private void cancelReservation(int bookId) {
         try (Connection conn = DatabaseManager.getInstance().getConnection()) {
+            // Start transaction
+            conn.setAutoCommit(false);
+            try {
+                // Get the number of copies from the active reservation
+                int reservedCopies = 0;
+                try (PreparedStatement getCopiesStmt = conn.prepareStatement(
+                        "SELECT copies FROM reservations WHERE book_id = ? AND user_id = ? AND status = 'Active'")) {
+                    getCopiesStmt.setInt(1, bookId);
+                    getCopiesStmt.setInt(2, currentUserId);
+                    ResultSet rs = getCopiesStmt.executeQuery();
+                    if (rs.next()) {
+                        reservedCopies = rs.getInt("copies");
+                    }
+                }
+
             // Update reservation status
             try (PreparedStatement pstmt = conn.prepareStatement(
                     "UPDATE reservations SET status = 'Cancelled' WHERE book_id = ? AND user_id = ? AND status = 'Active'")) {
@@ -499,12 +526,17 @@ public class ReservationPanel extends BasePanel {
                 int updated = pstmt.executeUpdate();
                 
                 if (updated > 0) {
-                    // Update book status back to available
+                        // Update book copies and status
                     try (PreparedStatement updateStmt = conn.prepareStatement(
-                            "UPDATE books SET status = 'Available' WHERE book_id = ?")) {
-                        updateStmt.setInt(1, bookId);
+                                "UPDATE books SET copies = copies + ?, status = CASE WHEN copies + ? > 0 THEN 'Available' ELSE status END WHERE book_id = ?")) {
+                            updateStmt.setInt(1, reservedCopies);
+                            updateStmt.setInt(2, reservedCopies);
+                            updateStmt.setInt(3, bookId);
                         updateStmt.executeUpdate();
                     }
+                        
+                        // Commit transaction
+                        conn.commit();
                     
                     JOptionPane.showMessageDialog(this,
                         "Reservation cancelled successfully!",
@@ -515,11 +547,18 @@ public class ReservationPanel extends BasePanel {
                     loadBooks();
                     loadReservations();
                 } else {
+                        conn.rollback();
                     JOptionPane.showMessageDialog(this,
                         "No active reservation found for this book",
                         "Error",
                         JOptionPane.ERROR_MESSAGE);
                 }
+                }
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             e.printStackTrace();

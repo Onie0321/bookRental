@@ -11,6 +11,7 @@ import java.util.List;
 import javax.swing.border.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Calendar;
 
 public class AdminDashboard extends JFrame {
     private JPanel sidebar;
@@ -34,12 +35,13 @@ public class AdminDashboard extends JFrame {
     
     private JTable bookTable;
     private DefaultTableModel bookModel;
-    private JLabel totalBooksLabel;
-    private JLabel totalUsersLabel;
-    private JLabel totalRentalsLabel;
-    private JLabel totalRevenueLabel;
-    private JLabel totalCopiesLabel;
-    private JLabel totalAvailableLabel;
+    private JLabel totalBooksLabel = new JLabel("0");
+    private JLabel totalUsersLabel = new JLabel("0");
+    private JLabel totalRentalsLabel = new JLabel("0");
+    private JLabel totalRevenueLabel = new JLabel("₱0.00");
+    private JLabel totalCopiesLabel = new JLabel("0");
+    private JLabel totalAvailableLabel = new JLabel("0");
+    private JLabel overdueBooksLabel = new JLabel("0");
     
     private String username;
     private JPanel mainPanel;
@@ -136,31 +138,34 @@ public class AdminDashboard extends JFrame {
         sidebar.setPreferredSize(new Dimension(200, 0));
         sidebar.setBorder(BorderFactory.createEmptyBorder(20, 10, 20, 10));
         
-        // Logo
-        JLabel logoLabel = new JLabel("LibroRent");
-        logoLabel.setFont(new Font("Arial", Font.BOLD, 24));
+        // Logo with enhanced styling
+        JLabel logoLabel = new JLabel("📚 LibroRent");
+        logoLabel.setFont(new Font("Segoe UI Emoji", Font.BOLD, 24));
         logoLabel.setForeground(Color.WHITE);
-        logoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        logoLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        logoLabel.setBorder(BorderFactory.createEmptyBorder(0, 10, 20, 0));
         sidebar.add(logoLabel);
-        sidebar.add(Box.createVerticalStrut(30));
+        sidebar.add(Box.createVerticalStrut(20));
         
-        // Menu items
+        // Menu items with enhanced icons and styling
         String[] menuItems = {
-            "📊 Dashboard",
+            "📊 Dashboard Overview",
             "📚 Book Management",
-            "👤 User Management",
+            "👥 User Management",
             "📖 Rental Management",
             "📦 Inventory"
         };
         
         for (String item : menuItems) {
             JButton button = createMenuButton(item);
+            button.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 14));
             sidebar.add(button);
             sidebar.add(Box.createVerticalStrut(10));
         }
         
-        // Logout button
+        // Logout button with enhanced styling
         JButton logoutButton = createMenuButton("🚪 Logout");
+        logoutButton.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 14));
         logoutButton.addActionListener(e -> handleLogout());
         sidebar.add(Box.createVerticalGlue());
         sidebar.add(logoutButton);
@@ -170,40 +175,47 @@ public class AdminDashboard extends JFrame {
     
     private JButton createMenuButton(String text) {
         JButton button = new JButton(text);
-        button.setFont(new Font("Arial", Font.PLAIN, 14));
+        button.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 14));
         button.setForeground(Color.WHITE);
         button.setBackground(new Color(51, 51, 51));
         button.setBorderPainted(false);
         button.setFocusPainted(false);
-        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+        button.setAlignmentX(Component.LEFT_ALIGNMENT);
         button.setMaximumSize(new Dimension(180, 40));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
-        // Add hover effect
+        // Add hover effect with smooth transition
         button.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) {
                 button.setBackground(new Color(70, 70, 70));
+                button.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(100, 100, 100), 1),
+                    BorderFactory.createEmptyBorder(5, 10, 5, 10)
+                ));
             }
             public void mouseExited(MouseEvent e) {
                 button.setBackground(new Color(51, 51, 51));
+                button.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
             }
         });
         
-        // Add click handler
+        // Add click handler with visual feedback
         button.addActionListener(e -> {
             String cardName;
             switch (text) {
-                case "📊 Dashboard":
+                case "📊 Dashboard Overview":
                     cardName = "DASHBOARD";
-                    updateDashboardStats(); // Only update stats when switching to dashboard
+                    updateDashboardStats();
                     break;
                 case "📚 Book Management":
                     cardName = "BOOK_MANAGEMENT";
                     break;
-                case "👤 User Management":
+                case "👥 User Management":
                     cardName = "USER_MANAGEMENT";
                     break;
                 case "📖 Rental Management":
                     cardName = "RENTAL_MANAGEMENT";
+                    refreshRentalManagementPanel();
                     break;
                 case "📦 Inventory":
                     cardName = "INVENTORY";
@@ -212,9 +224,58 @@ public class AdminDashboard extends JFrame {
                     cardName = "DASHBOARD";
             }
             cardLayout.show(contentPanel, cardName);
+            
+            // Visual feedback for selected button
+            for (Component comp : sidebar.getComponents()) {
+                if (comp instanceof JButton) {
+                    JButton btn = (JButton) comp;
+                    if (btn.getText().equals(text)) {
+                        btn.setBackground(new Color(90, 90, 90));
+                        btn.setBorder(BorderFactory.createCompoundBorder(
+                            BorderFactory.createLineBorder(new Color(120, 120, 120), 1),
+                            BorderFactory.createEmptyBorder(5, 10, 5, 10)
+                        ));
+                    } else {
+                        btn.setBackground(new Color(51, 51, 51));
+                        btn.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+                    }
+                }
+            }
         });
         
         return button;
+    }
+    
+    private void refreshRentalManagementPanel() {
+        System.out.println("\n=== Refreshing Rental Management Panel ===");
+        try {
+            // Get the rental management panel
+            JPanel rentalPanel = (JPanel) contentPanel.getComponent(3); // Index 3 is RENTAL_MANAGEMENT
+            JPanel contentPanel = (JPanel) rentalPanel.getComponent(1); // Get the content panel
+            JPanel userFeesPanel = (JPanel) contentPanel.getComponent(0); // Get the user fees panel
+            JScrollPane scrollPane = (JScrollPane) userFeesPanel.getComponent(1); // Get the scroll pane
+            JTable userFeesTable = (JTable) scrollPane.getViewport().getView();
+            DefaultTableModel model = (DefaultTableModel) userFeesTable.getModel();
+            
+            System.out.println("Found user fees table, refreshing data...");
+            loadUserFeesSummary(model);
+            System.out.println("User fees data refreshed");
+            
+            // Also refresh the rentals table
+            JPanel rentalDetailsPanel = (JPanel) contentPanel.getComponent(1);
+            JScrollPane rentalsScrollPane = (JScrollPane) rentalDetailsPanel.getComponent(1);
+            JTable rentalsTable = (JTable) rentalsScrollPane.getViewport().getView();
+            DefaultTableModel rentalsModel = (DefaultTableModel) rentalsTable.getModel();
+            
+            System.out.println("Found rentals table, refreshing data...");
+            loadRentals();
+            System.out.println("Rentals data refreshed");
+            
+        } catch (Exception e) {
+            System.out.println("Error refreshing rental management panel: " + e.getMessage());
+            e.printStackTrace();
+        }
+        System.out.println("=== Rental Management Panel Refresh Complete ===\n");
     }
     
     private JPanel createDashboardPanel() {
@@ -249,93 +310,104 @@ public class AdminDashboard extends JFrame {
         panel.add(headerPanel, BorderLayout.NORTH);
         
         // Statistics panel
-        JPanel statsPanel = new JPanel(new GridLayout(3, 3, 20, 20));
-        statsPanel.setBorder(BorderFactory.createEmptyBorder(20, 0, 0, 0));
-        statsPanel.setBackground(new Color(245, 245, 245));
-        
-        // Initialize the label fields
-        totalBooksLabel = new JLabel("Total Books: 0");
-        totalUsersLabel = new JLabel("Total Users: 0");
-        totalRentalsLabel = new JLabel("Total Rentals: 0");
-        totalRevenueLabel = new JLabel("Total Revenue: ₱0.00");
-        
-        // Create stat cards with different colors
-        statsPanel.add(createStatCard("Total Books", "0", "📚", new Color(52, 152, 219)));      // Blue
-        statsPanel.add(createStatCard("Available Books", "0", "✅", new Color(46, 204, 113)));  // Green
-        statsPanel.add(createStatCard("Unavailable Books", "0", "❌", new Color(231, 76, 60))); // Red
-        statsPanel.add(createStatCard("E-Books", "0", "💻", new Color(155, 89, 182)));         // Purple
-        statsPanel.add(createStatCard("Physical Books", "0", "📖", new Color(241, 196, 15)));  // Yellow
-        statsPanel.add(createStatCard("Total Copies", "0", "📦", new Color(230, 126, 34)));    // Orange
-        statsPanel.add(createStatCard("Active Rentals", "0", "📖", new Color(52, 73, 94)));    // Dark Blue
-        statsPanel.add(createStatCard("Total Users", "0", "👥", new Color(22, 160, 133)));     // Teal
-        statsPanel.add(createStatCard("Overdue Books", "0", "⚠️", new Color(192, 57, 43)));    // Dark Red
-        
+        JPanel statsPanel = createStatsPanel();
         panel.add(statsPanel, BorderLayout.CENTER);
         
         return panel;
     }
     
-    private JPanel createStatCard(String title, String value, String icon, Color color) {
-        JPanel card = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                int w = getWidth();
-                int h = getHeight();
-                Color color2 = color.darker();
-                GradientPaint gp = new GradientPaint(0, 0, color, w, h, color2);
-                g2d.setPaint(gp);
-                g2d.fillRect(0, 0, w, h);
-            }
-        };
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(200, 200, 200)),
-            BorderFactory.createEmptyBorder(20, 20, 20, 20)
-        ));
+    private JPanel createStatsPanel() {
+        JPanel statsPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
+        // Create stat panels with different colors and enhanced icons
+        JPanel booksPanel = createStatPanel("Total Books", "📚", totalBooksLabel, new Color(52, 152, 219));  // Blue
+        JPanel unavailablePanel = createStatPanel("Unavailable Books", "🔒", new JLabel("0"), new Color(231, 76, 60));  // Red
+        JPanel ebooksPanel = createStatPanel("E-Books", "📱", new JLabel("0"), new Color(46, 204, 113));  // Green
+        JPanel physicalPanel = createStatPanel("Physical Books", "📖", new JLabel("0"), new Color(155, 89, 182));  // Purple
+        JPanel activePanel = createStatPanel("Active Rentals", "✅", new JLabel("0"), new Color(241, 196, 15));  // Yellow
+        JPanel overduePanel = createStatPanel("Overdue Books", "⚠️", overdueBooksLabel, new Color(230, 126, 34));  // Orange
+        
+        // Add panels to stats panel
+        statsPanel.add(booksPanel);
+        statsPanel.add(unavailablePanel);
+        statsPanel.add(ebooksPanel);
+        statsPanel.add(physicalPanel);
+        statsPanel.add(activePanel);
+        statsPanel.add(overduePanel);
+        
+        // Create a panel for total users at the bottom right with proper emoji
+        JPanel usersPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        usersPanel.setOpaque(false);
+        JLabel usersIcon = new JLabel("👥");
+        usersIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 16));
+        JLabel usersText = new JLabel("Total Users: ");
+        usersText.setFont(new Font("Arial", Font.BOLD, 14));
+        totalUsersLabel.setFont(new Font("Arial", Font.BOLD, 14));
+        usersPanel.add(usersIcon);
+        usersPanel.add(usersText);
+        usersPanel.add(totalUsersLabel);
+        
+        // Create a container panel to hold both stats and users panel
+        JPanel containerPanel = new JPanel(new BorderLayout());
+        containerPanel.add(statsPanel, BorderLayout.CENTER);
+        containerPanel.add(usersPanel, BorderLayout.SOUTH);
+        
+        return containerPanel;
+    }
+    
+    private JPanel createStatPanel(String title, String icon, JLabel valueLabel, Color backgroundColor) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        panel.setBackground(backgroundColor);
+        
+        // Create icon panel with background
+        JPanel iconPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        iconPanel.setOpaque(false);
         JLabel iconLabel = new JLabel(icon);
-        iconLabel.setFont(new Font("Arial", Font.PLAIN, 32));
+        iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 36)); // Use emoji font
         iconLabel.setForeground(Color.WHITE);
-        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        iconPanel.add(iconLabel);
         
+        // Create title panel
+        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        titlePanel.setOpaque(false);
         JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
         titleLabel.setForeground(Color.WHITE);
-        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titlePanel.add(titleLabel);
         
-        JLabel valueLabel = new JLabel(value);
-        valueLabel.setFont(new Font("Arial", Font.BOLD, 28));
+        // Create value panel
+        JPanel valuePanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        valuePanel.setOpaque(false);
+        valueLabel.setFont(new Font("Arial", Font.BOLD, 24));
         valueLabel.setForeground(Color.WHITE);
-        valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        valuePanel.add(valueLabel);
         
-        card.add(iconLabel);
-        card.add(Box.createVerticalStrut(10));
-        card.add(titleLabel);
-        card.add(Box.createVerticalStrut(5));
-        card.add(valueLabel);
+        // Add panels to main panel
+        panel.add(iconPanel, BorderLayout.NORTH);
+        panel.add(titlePanel, BorderLayout.CENTER);
+        panel.add(valuePanel, BorderLayout.SOUTH);
         
         // Add hover effect
-        card.addMouseListener(new MouseAdapter() {
+        panel.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) {
-                card.setCursor(new Cursor(Cursor.HAND_CURSOR));
-                card.setBorder(BorderFactory.createCompoundBorder(
+                panel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                panel.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(new Color(150, 150, 150)),
                     BorderFactory.createEmptyBorder(20, 20, 20, 20)
                 ));
             }
             public void mouseExited(MouseEvent e) {
-                card.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-                card.setBorder(BorderFactory.createCompoundBorder(
+                panel.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+                panel.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(new Color(200, 200, 200)),
                     BorderFactory.createEmptyBorder(20, 20, 20, 20)
                 ));
             }
         });
         
-        return card;
+        return panel;
     }
     
     private JPanel createBookManagementPanel() {
@@ -493,9 +565,9 @@ public class AdminDashboard extends JFrame {
         // Statistics panel
         JPanel statsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         statsPanel.setBackground(new Color(245, 245, 245));
-        JLabel totalBooksLabel = new JLabel("Total Books: 0");
-        JLabel totalCopiesLabel = new JLabel("Total Copies: 0");
-        JLabel totalAvailableLabel = new JLabel("Total Available: 0");
+        totalBooksLabel = new JLabel("Total Books: 0");
+        totalCopiesLabel = new JLabel("Total Copies: 0");
+        totalAvailableLabel = new JLabel("Total Available: 0");
         totalBooksLabel.setFont(new Font("Arial", Font.BOLD, 14));
         totalCopiesLabel.setFont(new Font("Arial", Font.BOLD, 14));
         totalAvailableLabel.setFont(new Font("Arial", Font.BOLD, 14));
@@ -539,9 +611,7 @@ public class AdminDashboard extends JFrame {
                     
                     // Update dashboard stats
                     updateStatCard(0, totalBooks); // Total Books
-                    updateStatCard(1, availableCopies); // Available Books
-                    updateStatCard(2, unavailableCopies); // Unavailable Books
-                    updateStatCard(5, totalCopies); // Total Copies
+                    updateStatCard(1, unavailableCopies); // Unavailable Books
                 }
             }
             
@@ -549,7 +619,7 @@ public class AdminDashboard extends JFrame {
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM books WHERE format = 'E-Book'")) {
                 if (rs.next()) {
-                    updateStatCard(3, rs.getInt(1));
+                    updateStatCard(2, rs.getInt(1));
                 }
             }
             
@@ -557,15 +627,30 @@ public class AdminDashboard extends JFrame {
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM books WHERE format = 'Physical'")) {
                 if (rs.next()) {
+                    updateStatCard(3, rs.getInt(1));
+                }
+            }
+            
+            // Active rentals - only count rentals that are currently active and not returned
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("""
+                    SELECT COUNT(*) FROM rentals 
+                    WHERE status = 'Active' 
+                    AND return_date IS NULL""")) {
+                if (rs.next()) {
                     updateStatCard(4, rs.getInt(1));
                 }
             }
             
-            // Active rentals
+            // Overdue books - only count currently active overdue rentals
             try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM rentals WHERE status = 'Active'")) {
+                 ResultSet rs = stmt.executeQuery("""
+                    SELECT COUNT(*) FROM rentals 
+                    WHERE status = 'Active' 
+                    AND due_date < datetime('now')
+                 """)) {
                 if (rs.next()) {
-                    updateStatCard(6, rs.getInt(1));
+                    updateStatCard(5, rs.getInt(1));
                 }
             }
             
@@ -573,18 +658,7 @@ public class AdminDashboard extends JFrame {
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM users")) {
                 if (rs.next()) {
-                    updateStatCard(7, rs.getInt(1));
-                }
-            }
-            
-            // Overdue books
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("""
-                    SELECT COUNT(*) FROM rentals 
-                    WHERE status = 'Active' AND due_date < datetime('now')
-                 """)) {
-                if (rs.next()) {
-                    updateStatCard(8, rs.getInt(1));
+                    updateStatCard(6, rs.getInt(1));
                 }
             }
         } catch (SQLException e) {
@@ -594,10 +668,61 @@ public class AdminDashboard extends JFrame {
     }
     
     private void updateStatCard(int index, int value) {
-        JPanel statsPanel = (JPanel) ((JPanel) contentPanel.getComponent(0)).getComponent(1);
-        JPanel card = (JPanel) statsPanel.getComponent(index);
-        JLabel valueLabel = (JLabel) card.getComponent(4);
-        valueLabel.setText(String.valueOf(value));
+        System.out.println("\n=== Updating Stat Card ===");
+        System.out.println("Index: " + index + ", Value: " + value);
+        
+        try {
+            JPanel dashboardPanel = (JPanel) contentPanel.getComponent(0);
+            System.out.println("Found dashboard panel");
+            
+            JPanel containerPanel = (JPanel) dashboardPanel.getComponent(1);
+            System.out.println("Found container panel");
+            
+            JPanel statsPanel = (JPanel) containerPanel.getComponent(0);
+            System.out.println("Found stats panel with " + statsPanel.getComponentCount() + " components");
+            
+            // Check if the index is valid
+            if (index < 0 || index >= statsPanel.getComponentCount()) {
+                System.err.println("Invalid stat card index: " + index);
+                return;
+            }
+            
+            JPanel card = (JPanel) statsPanel.getComponent(index);
+            System.out.println("Found stat card at index " + index);
+            
+            // Find the value panel and update its label
+            boolean labelUpdated = false;
+            for (Component comp : card.getComponents()) {
+                if (comp instanceof JPanel) {
+                    JPanel panel = (JPanel) comp;
+                    for (Component innerComp : panel.getComponents()) {
+                        if (innerComp instanceof JLabel) {
+                            JLabel label = (JLabel) innerComp;
+                            String oldValue = label.getText();
+                            if (oldValue.equals("0") || oldValue.equals("₱0.00") || 
+                                oldValue.matches("\\d+") || oldValue.matches("₱\\d+\\.\\d+")) {
+                                String newValue = String.valueOf(value);
+                                if (index == 5) { // Overdue books card
+                                    System.out.println("Updating overdue books count from " + oldValue + " to " + newValue);
+                                }
+                                label.setText(newValue);
+                                labelUpdated = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (!labelUpdated) {
+                System.out.println("WARNING: Could not find label to update in stat card " + index);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Error updating stat card: " + e.getMessage());
+            e.printStackTrace();
+        }
+        System.out.println("=== Stat Card Update Complete ===\n");
     }
     
     private void showAddBookDialog() {
@@ -1164,7 +1289,7 @@ public class AdminDashboard extends JFrame {
                 gbc.gridx = 0; gbc.gridy = 4;
                 formPanel.add(new JLabel("Format:"), gbc);
                 gbc.gridx = 1;
-                String[] formats = {"Hardcover", "Paperback", "E-Book", "Audiobook"};
+                String[] formats = {"Physical", "E-Book",};
                 JComboBox<String> formatCombo = new JComboBox<>(formats);
                 formatCombo.setSelectedItem(rs.getString("format"));
                 formPanel.add(formatCombo, gbc);
@@ -1245,33 +1370,89 @@ public class AdminDashboard extends JFrame {
                 
                 deleteButton.addActionListener(e -> {
                     int choice = JOptionPane.showConfirmDialog(this,
-                        "Are you sure you want to delete this book?",
+                        "Are you sure you want to delete this book? This action cannot be undone.",
                         "Confirm Delete",
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.WARNING_MESSAGE);
                     
                     if (choice == JOptionPane.YES_OPTION) {
                         try {
-                            // Delete book from database
+                            // First check if the book has any active rentals
+                            try (PreparedStatement checkStmt = conn.prepareStatement(
+                                "SELECT COUNT(*) as rental_count FROM rentals WHERE book_id = ? AND return_date IS NULL")) {
+                                checkStmt.setInt(1, Integer.parseInt(numericBookId));
+                                ResultSet rentalCheck = checkStmt.executeQuery();
+                                
+                                if (rentalCheck.next() && rentalCheck.getInt("rental_count") > 0) {
+                                    JOptionPane.showMessageDialog(this,
+                                        "Cannot delete book: It has active rentals. Please ensure all copies are returned first.",
+                                        "Delete Error",
+                                        JOptionPane.ERROR_MESSAGE);
+                                    return;
+                                }
+                            }
+                            
+                            // Begin transaction
+                            conn.setAutoCommit(false);
+                            try {
+                                // Delete related records first
+                                try (PreparedStatement deleteRentalsStmt = conn.prepareStatement(
+                                    "DELETE FROM rentals WHERE book_id = ?")) {
+                                    deleteRentalsStmt.setInt(1, Integer.parseInt(numericBookId));
+                                    deleteRentalsStmt.executeUpdate();
+                                }
+                                
+                                // Delete related reservations
+                                try (PreparedStatement deleteReservationsStmt = conn.prepareStatement(
+                                    "DELETE FROM reservations WHERE book_id = ?")) {
+                                    deleteReservationsStmt.setInt(1, Integer.parseInt(numericBookId));
+                                    deleteReservationsStmt.executeUpdate();
+                                }
+                                
+                                // Now delete the book
                             try (PreparedStatement deleteStmt = conn.prepareStatement(
                                  "DELETE FROM books WHERE book_id = ?")) {
-                                deleteStmt.setInt(1, Integer.parseInt(numericBookId));
-                                deleteStmt.executeUpdate();
+                                    deleteStmt.setInt(1, Integer.parseInt(numericBookId));
+                                    int rowsAffected = deleteStmt.executeUpdate();
+                                    
+                                    if (rowsAffected > 0) {
+                                        // Commit transaction
+                                        conn.commit();
                             
                                 // Refresh book list
                                 loadBooks(bookModel);
-                            
                             dialog.dispose();
                             
                                 JOptionPane.showMessageDialog(this,
                                 "Book deleted successfully!",
                                 "Success",
                                 JOptionPane.INFORMATION_MESSAGE);
+                                    } else {
+                                        conn.rollback();
+                                        JOptionPane.showMessageDialog(this,
+                                            "Book not found or already deleted.",
+                                            "Delete Error",
+                                            JOptionPane.ERROR_MESSAGE);
+                                    }
+                                }
+                            } catch (SQLException ex) {
+                                // Rollback transaction on error
+                                conn.rollback();
+                                throw ex;
+                            } finally {
+                                // Reset auto-commit
+                                conn.setAutoCommit(true);
                             }
                         } catch (SQLException ex) {
                             ex.printStackTrace();
+                            String errorMessage = "Error deleting book: ";
+                            if (ex.getMessage().contains("foreign key constraint")) {
+                                errorMessage += "This book has associated records in the system. Please delete related records first.";
+                            } else {
+                                errorMessage += ex.getMessage();
+                            }
                             JOptionPane.showMessageDialog(this,
-                                "Error deleting book: " + ex.getMessage(),
+                                errorMessage,
                                 "Error",
                                 JOptionPane.ERROR_MESSAGE);
                         }
@@ -1301,42 +1482,134 @@ public class AdminDashboard extends JFrame {
     }
 
     private void updateDashboardStats() {
-        try (Connection conn = dbManager.getConnection()) {
-            // Total books
+        System.out.println("\n=== Updating Dashboard Stats ===");
+        try (Connection conn = DatabaseManager.getInstance().getConnection()) {
+            System.out.println("Database connection established");
+            
+            // Get total books
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as total FROM books")) {
                 if (rs.next()) {
-                    totalBooksLabel.setText("Total Books: " + rs.getInt("total"));
+                    int totalBooks = rs.getInt("total");
+                    System.out.println("Total Books: " + totalBooks);
+                    updateStatCard(0, totalBooks);
                 }
             }
             
-            // Total users
+            // Get unavailable books
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("""
+                     SELECT COUNT(*) as total FROM books 
+                     WHERE status != 'Available' OR copies = 0""")) {
+                if (rs.next()) {
+                    int unavailableBooks = rs.getInt("total");
+                    System.out.println("Unavailable Books: " + unavailableBooks);
+                    updateStatCard(1, unavailableBooks);
+                }
+            }
+            
+            // Get e-books count
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as total FROM books WHERE format = 'E-Book'")) {
+                if (rs.next()) {
+                    int ebooks = rs.getInt("total");
+                    System.out.println("E-Books: " + ebooks);
+                    updateStatCard(2, ebooks);
+                }
+            }
+            
+            // Get physical books count
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as total FROM books WHERE format = 'Physical'")) {
+                if (rs.next()) {
+                    int physicalBooks = rs.getInt("total");
+                    System.out.println("Physical Books: " + physicalBooks);
+                    updateStatCard(3, physicalBooks);
+                }
+            }
+            
+            // Get active rentals
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("""
+                    SELECT COUNT(*) as active_count FROM rentals 
+                    WHERE status = 'Active' 
+                    AND return_date IS NULL""")) {
+                if (rs.next()) {
+                    int activeRentals = rs.getInt("active_count");
+                    System.out.println("Active Rentals: " + activeRentals);
+                    updateStatCard(4, activeRentals);
+                }
+            }
+            
+            // Get overdue books - with detailed debugging
+            System.out.println("\nChecking overdue books...");
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("""
+                    SELECT 
+                        COUNT(*) as overdue_count,
+                        GROUP_CONCAT(r.id || ':' || b.title || ':' || r.due_date) as overdue_details
+                    FROM rentals r
+                    JOIN books b ON r.book_id = b.book_id
+                    WHERE r.return_date IS NULL 
+                    AND r.due_date < datetime('now')
+                    AND r.status = 'Active'
+                 """)) {
+                if (rs.next()) {
+                    int overdueCount = rs.getInt("overdue_count");
+                    String overdueDetails = rs.getString("overdue_details");
+                    
+                    System.out.println("Found " + overdueCount + " overdue books");
+                    if (overdueDetails != null) {
+                        System.out.println("\nOverdue Books Details:");
+                        String[] details = overdueDetails.split(",");
+                        for (String detail : details) {
+                            String[] parts = detail.split(":");
+                            if (parts.length >= 3) {
+                                System.out.println("Rental ID: " + parts[0] + 
+                                                 ", Book: " + parts[1] + 
+                                                 ", Due Date: " + parts[2]);
+                            }
+                        }
+                    }
+                    
+                    // Let's also check the current date for comparison
+                    try (Statement dateStmt = conn.createStatement();
+                         ResultSet dateRs = dateStmt.executeQuery("SELECT datetime('now') as current_date")) {
+                        if (dateRs.next()) {
+                            System.out.println("\nCurrent Date: " + dateRs.getString("current_date"));
+                        }
+                    }
+                    
+                    updateStatCard(5, overdueCount);
+                } else {
+                    System.out.println("No overdue books found");
+                    updateStatCard(5, 0);
+                }
+            }
+            
+            // Get total users
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as total FROM users")) {
                 if (rs.next()) {
-                    totalUsersLabel.setText("Total Users: " + rs.getInt("total"));
+                    int totalUsers = rs.getInt("total");
+                    System.out.println("Total Users: " + totalUsers);
+                    totalUsersLabel.setText(String.format("%,d", totalUsers));
                 }
             }
             
-            // Total rentals
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT COUNT(*) as total FROM rentals")) {
-                if (rs.next()) {
-                    totalRentalsLabel.setText("Total Rentals: " + rs.getInt("total"));
-                }
-            }
-            
-            // Total revenue (sum of late fees)
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT SUM(late_fee) as total FROM rentals")) {
-                if (rs.next()) {
-                    double total = rs.getDouble("total");
-                    totalRevenueLabel.setText("Total Revenue: ₱" + String.format("%.2f", total));
-                }
-            }
         } catch (SQLException e) {
+            System.out.println("ERROR: SQL Exception occurred");
+            System.out.println("Error message: " + e.getMessage());
+            System.out.println("SQL State: " + e.getSQLState());
+            System.out.println("Error Code: " + e.getErrorCode());
             e.printStackTrace();
+            
+            JOptionPane.showMessageDialog(this,
+                "Error updating dashboard stats: " + e.getMessage(),
+                "Database Error",
+                JOptionPane.ERROR_MESSAGE);
         }
+        System.out.println("=== Dashboard Stats Update Complete ===\n");
     }
 
     private JPanel createUserManagementPanel() {
@@ -1449,6 +1722,7 @@ public class AdminDashboard extends JFrame {
     }
 
     private JPanel createRentalManagementPanel() {
+        System.out.println("\n=== Creating Rental Management Panel ===");
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         panel.setBackground(new Color(245, 245, 245));
@@ -1547,6 +1821,11 @@ public class AdminDashboard extends JFrame {
         userFeesPanel.add(userFeesHeader, BorderLayout.NORTH);
         userFeesPanel.add(userFeesScrollPane, BorderLayout.CENTER);
         
+        // Load user fees data
+        System.out.println("Loading user fees data...");
+        loadUserFeesSummary(userFeesModel);
+        System.out.println("User fees data loaded");
+        
         // Bottom panel for rental details
         JPanel rentalDetailsPanel = new JPanel(new BorderLayout(10, 10));
         rentalDetailsPanel.setBackground(new Color(245, 245, 245));
@@ -1562,16 +1841,57 @@ public class AdminDashboard extends JFrame {
         searchButton.setFocusPainted(false);
         searchButton.setBorderPainted(false);
         
+        // Add payment status buttons
+        JButton markAllPaidButton = new JButton("Mark All Paid");
+        markAllPaidButton.setBackground(new Color(46, 204, 113)); // Green
+        markAllPaidButton.setForeground(Color.WHITE);
+        markAllPaidButton.setFocusPainted(false);
+        markAllPaidButton.setBorderPainted(false);
+
+        JButton markAllPendingButton = new JButton("Mark All Pending");
+        markAllPendingButton.setBackground(new Color(231, 76, 60)); // Red
+        markAllPendingButton.setForeground(Color.WHITE);
+        markAllPendingButton.setFocusPainted(false);
+        markAllPendingButton.setBorderPainted(false);
+
+        // Add action listeners for the buttons
+        markAllPaidButton.addActionListener(e -> {
+            int choice = JOptionPane.showConfirmDialog(this,
+                "Are you sure you want to mark all rentals as paid?",
+                "Confirm Action",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            
+            if (choice == JOptionPane.YES_OPTION) {
+                updateAllPaymentStatus("paid");
+            }
+        });
+
+        markAllPendingButton.addActionListener(e -> {
+            int choice = JOptionPane.showConfirmDialog(this,
+                "Are you sure you want to mark all rentals as pending?",
+                "Confirm Action",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            
+            if (choice == JOptionPane.YES_OPTION) {
+                updateAllPaymentStatus("pending");
+            }
+        });
+        
         searchPanel.add(new JLabel("Search:"));
         searchPanel.add(searchField);
         searchPanel.add(searchButton);
+        searchPanel.add(Box.createHorizontalStrut(20)); // Add some spacing
+        searchPanel.add(markAllPaidButton);
+        searchPanel.add(markAllPendingButton);
         
         // Rentals table
-        String[] columns = {"ID", "Book", "User", "Rental Date", "Due Date", "Return Date", "Status", "Late Fee"};
+        String[] columns = {"ID", "Book", "User", "Rental Date", "Due Date", "Return Date", "Status", "Payment Status", "Late Fee"};
         rentalsModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false;
+                return column == 7; // Only payment status column is editable
             }
         };
         
@@ -1583,6 +1903,26 @@ public class AdminDashboard extends JFrame {
         rentalsTable.getTableHeader().setForeground(Color.WHITE);
         rentalsTable.getTableHeader().setFont(new Font("Arial", Font.BOLD, 12));
         
+        // Add payment status column renderer and editor
+        TableColumn paymentStatusColumn = rentalsTable.getColumnModel().getColumn(7);
+        paymentStatusColumn.setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    String status = value.toString();
+                    if (status.equals("paid")) {
+                        c.setForeground(new Color(46, 204, 113)); // Green
+                    } else {
+                        c.setForeground(new Color(231, 76, 60));  // Red
+                    }
+                }
+                return c;
+            }
+        });
+        paymentStatusColumn.setCellEditor(new DefaultCellEditor(new JComboBox<>(new String[]{"pending", "paid"})));
+        
         // Custom renderer for rentals table
         rentalsTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
@@ -1592,17 +1932,46 @@ public class AdminDashboard extends JFrame {
                 if (!isSelected) {
                     c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
                 }
-                if (column == 7) { // Late Fee column
+                
+                // Color coding for different columns
+                if (column == 6) { // Status column
+                    String status = value.toString();
+                    if (status.equals("Active")) {
+                        c.setForeground(new Color(46, 204, 113)); // Green for Active
+                    } else if (status.equals("Returned")) {
+                        c.setForeground(new Color(231, 76, 60));  // Red for Returned
+                    }
+                } else if (column == 7) { // Payment Status column
+                    String status = value.toString();
+                    if (status.equals("paid")) {
+                        c.setForeground(new Color(46, 204, 113)); // Green for paid
+                    } else {
+                        c.setForeground(new Color(231, 76, 60));  // Red for pending
+                    }
+                } else if (column == 8) { // Late Fee column
                     if (value != null && value.toString().startsWith("₱")) {
                         double fee = Double.parseDouble(value.toString().substring(1));
                         if (fee > 0) {
-                            c.setForeground(new Color(192, 57, 43)); // Red for fees > 0
+                            c.setForeground(new Color(231, 76, 60)); // Red for fees > 0
                         } else {
-                            c.setForeground(new Color(39, 174, 96)); // Green for no fees
+                            c.setForeground(new Color(46, 204, 113)); // Green for no fees
                         }
                     }
                 }
                 return c;
+            }
+        });
+
+        // Add mouse listener for payment status editing
+        rentalsTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                int column = rentalsTable.getColumnModel().getColumnIndexAtX(e.getX());
+                int row = e.getY() / rentalsTable.getRowHeight();
+                
+                if (row < rentalsTable.getRowCount() && row >= 0 && column == 7) { // Payment Status column
+                    showPaymentStatusDialog(row);
+                }
             }
         });
         
@@ -1618,10 +1987,6 @@ public class AdminDashboard extends JFrame {
         panel.add(headerPanel, BorderLayout.NORTH);
         panel.add(contentPanel, BorderLayout.CENTER);
         
-        // Load initial data
-        loadRentals();
-        loadUserFeesSummary(userFeesModel);
-        
         // Add search functionality
         searchButton.addActionListener(e -> {
             String searchTerm = searchField.getText().trim();
@@ -1631,112 +1996,280 @@ public class AdminDashboard extends JFrame {
                 loadRentals();
             }
         });
+
+        // Add sorting capability to rentalsTable
+        TableRowSorter<DefaultTableModel> rentalsSorter = new TableRowSorter<>(rentalsModel);
+        rentalsTable.setRowSorter(rentalsSorter);
         
+        // Set up column comparators for proper sorting
+        rentalsSorter.setComparator(0, Comparator.naturalOrder()); // ID
+        rentalsSorter.setComparator(3, (String s1, String s2) -> {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy hh:mm a");
+                return sdf.parse(s1).compareTo(sdf.parse(s2));
+            } catch (Exception e) {
+                return s1.compareTo(s2);
+            }
+        }); // Rental Date
+        rentalsSorter.setComparator(4, (String s1, String s2) -> {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy hh:mm a");
+                return sdf.parse(s1).compareTo(sdf.parse(s2));
+            } catch (Exception e) {
+                return s1.compareTo(s2);
+            }
+        }); // Due Date
+        rentalsSorter.setComparator(5, (String s1, String s2) -> {
+            try {
+                SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy hh:mm a");
+                return sdf.parse(s1).compareTo(sdf.parse(s2));
+            } catch (Exception e) {
+                return s1.compareTo(s2);
+            }
+        }); // Return Date
+        rentalsSorter.setComparator(8, (String s1, String s2) -> {
+            // Remove ₱ symbol and parse as double for proper sorting
+            double d1 = Double.parseDouble(s1.replace("₱", ""));
+            double d2 = Double.parseDouble(s2.replace("₱", ""));
+            return Double.compare(d1, d2);
+        }); // Late Fee
+        
+        // Add sorting capability to userFeesTable
+        TableRowSorter<DefaultTableModel> userFeesSorter = new TableRowSorter<>(userFeesModel);
+        userFeesTable.setRowSorter(userFeesSorter);
+        
+        // Set up column comparators for proper sorting
+        userFeesSorter.setComparator(0, Comparator.naturalOrder()); // User ID
+        userFeesSorter.setComparator(3, Comparator.naturalOrder()); // Total Books
+        userFeesSorter.setComparator(5, (String s1, String s2) -> {
+            // Remove ₱ symbol and parse as double for proper sorting
+            double d1 = Double.parseDouble(s1.replace("₱", ""));
+            double d2 = Double.parseDouble(s2.replace("₱", ""));
+            return Double.compare(d1, d2);
+        }); // Total Late Fees
+        userFeesSorter.setComparator(6, Comparator.naturalOrder()); // Active Rentals
+        userFeesSorter.setComparator(7, Comparator.naturalOrder()); // Overdue Rentals
+
         return panel;
     }
 
+    private void updateAllPaymentStatus(String status) {
+        try (Connection conn = dbManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "UPDATE rentals SET payment_status = ?")) {
+            
+            pstmt.setString(1, status);
+            int rowsAffected = pstmt.executeUpdate();
+            
+            // Refresh the rentals table
+            loadRentals();
+            
+            JOptionPane.showMessageDialog(this,
+                rowsAffected + " rentals have been marked as " + status,
+                "Success",
+                JOptionPane.INFORMATION_MESSAGE);
+                
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this,
+                "Error updating payment status: " + ex.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void showPaymentStatusDialog(int row) {
+        int rentalId = (int) rentalsModel.getValueAt(row, 0);
+        String currentStatus = (String) rentalsModel.getValueAt(row, 7);
+        String bookTitle = (String) rentalsModel.getValueAt(row, 1);
+        String username = (String) rentalsModel.getValueAt(row, 2);
+        
+        JDialog dialog = new JDialog(this, "Edit Payment Status", true);
+        dialog.setLayout(new BorderLayout(10, 10));
+        
+        // Create main panel with padding
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        
+        // Info panel
+        JPanel infoPanel = new JPanel(new GridLayout(3, 1, 5, 5));
+        infoPanel.add(new JLabel("Book: " + bookTitle));
+        infoPanel.add(new JLabel("User: " + username));
+        infoPanel.add(new JLabel("Current Status: " + currentStatus));
+        
+        // Status selection panel
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        statusPanel.add(new JLabel("New Status:"));
+        JComboBox<String> statusCombo = new JComboBox<>(new String[]{"pending", "paid"});
+        statusCombo.setSelectedItem(currentStatus);
+        statusPanel.add(statusCombo);
+        
+        // Button panel
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton saveButton = new JButton("Save");
+        JButton cancelButton = new JButton("Cancel");
+        
+        saveButton.addActionListener(e -> {
+            String newStatus = (String) statusCombo.getSelectedItem();
+            try (Connection conn = dbManager.getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(
+                     "UPDATE rentals SET payment_status = ? WHERE id = ?")) {
+                
+                pstmt.setString(1, newStatus);
+                pstmt.setInt(2, rentalId);
+                pstmt.executeUpdate();
+                
+                // Update the table
+                rentalsModel.setValueAt(newStatus, row, 7);
+                
+                dialog.dispose();
+                JOptionPane.showMessageDialog(this,
+                    "Payment status updated successfully!",
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
+                    
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(dialog,
+                    "Error updating payment status: " + ex.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        
+        cancelButton.addActionListener(e -> dialog.dispose());
+        
+        buttonPanel.add(cancelButton);
+        buttonPanel.add(saveButton);
+        
+        // Add components to main panel
+        mainPanel.add(infoPanel, BorderLayout.NORTH);
+        mainPanel.add(statusPanel, BorderLayout.CENTER);
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        dialog.add(mainPanel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
     private void loadUserFeesSummary(DefaultTableModel model) {
-        System.out.println("\n=== Starting User Fees Summary Loading ===");
+        System.out.println("\n=== Loading User Fees Summary ===");
         model.setRowCount(0);
         
         try (Connection conn = DatabaseManager.getInstance().getConnection()) {
             System.out.println("Database connection established");
             
-            // First, let's check what roles we have in the database
-            try (Statement stmt = conn.createStatement();
-                 ResultSet roleCheck = stmt.executeQuery("SELECT DISTINCT role FROM users")) {
-                System.out.println("\nAvailable roles in database:");
-                while (roleCheck.next()) {
-                    System.out.println("Role: '" + roleCheck.getString("role") + "'");
-                }
-            }
-            
-            // Now let's check if we have any rentals
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rentalCheck = stmt.executeQuery("SELECT COUNT(*) as count FROM rentals")) {
-                if (rentalCheck.next()) {
-                    System.out.println("Total rentals found: " + rentalCheck.getInt("count"));
-                }
-            }
-            
-            // Main query for user fees summary - using 'Member' role
-            try (PreparedStatement pstmt = conn.prepareStatement("""
+            // Main query for user fees summary
+            String query = """
+                WITH user_rentals AS (
                 SELECT 
                     u.id,
                     u.username,
                     u.full_name,
-                    (SELECT COUNT(DISTINCT r.book_id) FROM rentals r WHERE r.user_id = u.id) as total_books,
-                    (SELECT b.title FROM rentals r JOIN books b ON r.book_id = b.book_id WHERE r.user_id = u.id LIMIT 1) as sample_book,
-                    (SELECT COALESCE(SUM(r.late_fee), 0) FROM rentals r WHERE r.user_id = u.id) as total_late_fees,
-                    (SELECT COUNT(*) FROM rentals r WHERE r.user_id = u.id AND r.status = 'Active') as active_rentals,
-                    (SELECT COUNT(*) FROM rentals r WHERE r.user_id = u.id AND r.status = 'Active' AND r.due_date < datetime('now')) as overdue_rentals
+                        COUNT(DISTINCT r.book_id) as total_books,
+                        GROUP_CONCAT(DISTINCT b.title) as book_titles,
+                        COALESCE(SUM(
+                            CASE 
+                                WHEN r.return_date IS NULL AND r.due_date < datetime('now') 
+                                THEN (julianday('now') - julianday(r.due_date) - 1) * ?
+                                WHEN r.return_date > r.due_date
+                                THEN (julianday(r.return_date) - julianday(r.due_date) - 1) * ?
+                                ELSE 0
+                            END
+                        ), 0) as total_late_fees,
+                        COUNT(CASE WHEN r.return_date IS NULL THEN 1 END) as active_rentals,
+                        COUNT(CASE WHEN r.return_date IS NULL AND r.due_date < datetime('now') THEN 1 END) as overdue_rentals
                 FROM users u
+                    LEFT JOIN rentals r ON u.id = r.user_id
+                    LEFT JOIN books b ON r.book_id = b.book_id
                 WHERE u.role = 'Member'
-                ORDER BY total_late_fees DESC
-             """)) {
+                    GROUP BY u.id, u.username, u.full_name
+                )
+                SELECT * FROM user_rentals
+                ORDER BY total_late_fees DESC, active_rentals DESC, overdue_rentals DESC
+             """;
+            
+            System.out.println("Executing query with late fee rate: " + lateFeeRate);
+            
+            try (PreparedStatement pstmt = conn.prepareStatement(query)) {
+                pstmt.setDouble(1, lateFeeRate);
+                pstmt.setDouble(2, lateFeeRate);
                 
-                System.out.println("Executing main query...");
+                System.out.println("Query parameters set");
+                System.out.println("Executing query...");
+                
                 ResultSet rs = pstmt.executeQuery();
-                int rowCount = 0;
+                System.out.println("Query executed successfully");
                 
+                int rowCount = 0;
                 while (rs.next()) {
                     rowCount++;
                     int userId = rs.getInt("id");
                     String username = rs.getString("username");
                     String fullName = rs.getString("full_name");
                     int totalBooks = rs.getInt("total_books");
-                    String sampleBook = rs.getString("sample_book");
+                    String bookTitles = rs.getString("book_titles");
                     double totalLateFees = rs.getDouble("total_late_fees");
                     int activeRentals = rs.getInt("active_rentals");
                     int overdueRentals = rs.getInt("overdue_rentals");
                     
-                    System.out.println("\nProcessing user: " + username);
+                    System.out.println("\nProcessing user record #" + rowCount + ":");
                     System.out.println("User ID: " + userId);
+                    System.out.println("Username: " + username);
+                    System.out.println("Full Name: " + fullName);
                     System.out.println("Total Books: " + totalBooks);
-                    System.out.println("Sample Book: " + (sampleBook != null ? sampleBook : "null"));
+                    System.out.println("Book Titles: " + bookTitles);
                     System.out.println("Total Late Fees: " + totalLateFees);
                     System.out.println("Active Rentals: " + activeRentals);
                     System.out.println("Overdue Rentals: " + overdueRentals);
                     
-                    String bookTitles;
-                    if (totalBooks == 0) {
-                        bookTitles = "No books rented";
-                    } else if (totalBooks == 1) {
-                        bookTitles = sampleBook != null ? sampleBook : "Unknown book";
+                    // Format book titles
+                    String formattedTitles = "No books rented";
+                    if (bookTitles != null && !bookTitles.isEmpty()) {
+                        String[] titles = bookTitles.split(",");
+                        if (titles.length > 3) {
+                            formattedTitles = String.join(", ", Arrays.copyOfRange(titles, 0, 3)) + 
+                                            " and " + (titles.length - 3) + " more";
                     } else {
-                        bookTitles = sampleBook != null ? 
-                            sampleBook + " and " + (totalBooks - 1) + " more" : 
-                            totalBooks + " books rented";
+                            formattedTitles = bookTitles;
+                        }
                     }
+                    
+                    System.out.println("Formatted Titles: " + formattedTitles);
                     
                     Object[] row = {
                         userId,
                         username,
                         fullName,
                         totalBooks,
-                        bookTitles,
+                        formattedTitles,
                         String.format("₱%.2f", totalLateFees),
                         activeRentals,
                         overdueRentals
                     };
                     model.addRow(row);
+                    System.out.println("Row added to table model");
                 }
                 
-                System.out.println("\n=== Summary ===");
-                System.out.println("Total users loaded: " + rowCount);
-                System.out.println("Table model row count: " + model.getRowCount());
+                System.out.println("\nTotal records processed: " + rowCount);
                 
-            } catch (SQLException e) {
-                System.err.println("Error in main query execution:");
-                e.printStackTrace();
-                throw e;
+                if (rowCount == 0) {
+                    System.out.println("WARNING: No records found in the result set");
+                    // Let's check if there are any users at all
+                    try (Statement stmt = conn.createStatement();
+                         ResultSet userCount = stmt.executeQuery("SELECT COUNT(*) as count FROM users WHERE role = 'Member'")) {
+                        if (userCount.next()) {
+                            System.out.println("Total member users in database: " + userCount.getInt("count"));
+                        }
+                    }
+                }
             }
-            
         } catch (SQLException e) {
-            System.err.println("\n=== Error Details ===");
-            System.err.println("SQL Error in loadUserFeesSummary: " + e.getMessage());
-            System.err.println("SQL State: " + e.getSQLState());
-            System.err.println("Error Code: " + e.getErrorCode());
+            System.out.println("ERROR: SQL Exception occurred");
+            System.out.println("Error message: " + e.getMessage());
+            System.out.println("SQL State: " + e.getSQLState());
+            System.out.println("Error Code: " + e.getErrorCode());
             e.printStackTrace();
             
             JOptionPane.showMessageDialog(this,
@@ -1745,7 +2278,7 @@ public class AdminDashboard extends JFrame {
                 JOptionPane.ERROR_MESSAGE);
         }
         
-        System.out.println("=== End of User Fees Summary Loading ===\n");
+        System.out.println("=== User Fees Summary Loading Complete ===\n");
     }
 
     private void loadRentals() {
@@ -1761,7 +2294,11 @@ public class AdminDashboard extends JFrame {
                             WHEN r.return_date > r.due_date
                             THEN (julianday(r.return_date) - julianday(r.due_date) - 1) * ?
                             ELSE 0
-                        END as calculated_fee
+                        END as calculated_fee,
+                        CASE 
+                            WHEN r.return_date IS NOT NULL THEN 'Returned'
+                            ELSE 'Active'
+                        END as rental_status
                  FROM rentals r 
                  JOIN books b ON r.book_id = b.book_id 
                  JOIN users u ON r.user_id = u.id
@@ -1780,6 +2317,7 @@ public class AdminDashboard extends JFrame {
                 String dueDateStr = rs.getString("due_date");
                 String returnDateStr = rs.getString("return_date");
                 double lateFee = rs.getDouble("calculated_fee");
+                String status = rs.getString("rental_status");
                 totalLateFees += lateFee;
                 
                 // Format dates with time
@@ -1811,7 +2349,8 @@ public class AdminDashboard extends JFrame {
                     formattedRentalDate,
                     formattedDueDate,
                     formattedReturnDate,
-                    rs.getString("status"),
+                    status,
+                    rs.getString("payment_status"),
                     String.format("₱%.2f", lateFee)
                 };
                 rentalsModel.addRow(row);
@@ -1843,37 +2382,282 @@ public class AdminDashboard extends JFrame {
     }
 
     private void searchRentals(String query) {
-        try (Connection conn = dbManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement("""
-                SELECT r.*, b.title, u.full_name 
+        System.out.println("\n=== Starting Rental Search ===");
+        System.out.println("Search Query: " + query);
+        
+        try (Connection conn = dbManager.getConnection()) {
+            // Try to parse the query as a date
+            String datePattern = null;
+            try {
+                // First, check if the query is a month number or name
+                String processedQuery = query.trim().toLowerCase();
+                System.out.println("Processing query: " + processedQuery);
+                
+                // Map of month numbers and abbreviations to full names
+                Map<String, String> monthMap = new HashMap<>();
+                // Full names
+                monthMap.put("january", "January");
+                monthMap.put("february", "February");
+                monthMap.put("march", "March");
+                monthMap.put("april", "April");
+                monthMap.put("may", "May");
+                monthMap.put("june", "June");
+                monthMap.put("july", "July");
+                monthMap.put("august", "August");
+                monthMap.put("september", "September");
+                monthMap.put("october", "October");
+                monthMap.put("november", "November");
+                monthMap.put("december", "December");
+                
+                // Abbreviations
+                monthMap.put("jan", "January");
+                monthMap.put("feb", "February");
+                monthMap.put("mar", "March");
+                monthMap.put("apr", "April");
+                monthMap.put("jun", "June");
+                monthMap.put("jul", "July");
+                monthMap.put("aug", "August");
+                monthMap.put("sep", "September");
+                monthMap.put("sept", "September");
+                monthMap.put("oct", "October");
+                monthMap.put("nov", "November");
+                monthMap.put("dec", "December");
+                
+                // Numbers (both padded and unpadded)
+                monthMap.put("1", "January");
+                monthMap.put("01", "January");
+                monthMap.put("2", "February");
+                monthMap.put("02", "February");
+                monthMap.put("3", "March");
+                monthMap.put("03", "March");
+                monthMap.put("4", "April");
+                monthMap.put("04", "April");
+                monthMap.put("5", "May");
+                monthMap.put("05", "May");
+                monthMap.put("6", "June");
+                monthMap.put("06", "June");
+                monthMap.put("7", "July");
+                monthMap.put("07", "July");
+                monthMap.put("8", "August");
+                monthMap.put("08", "August");
+                monthMap.put("9", "September");
+                monthMap.put("09", "September");
+                monthMap.put("10", "October");
+                monthMap.put("11", "November");
+                monthMap.put("12", "December");
+                
+                String monthName = null;
+                String year = null;
+                
+                // Split the query into parts
+                String[] parts = processedQuery.split("\\s+");
+                
+                // Check if first part is a month identifier
+                if (monthMap.containsKey(parts[0])) {
+                    monthName = monthMap.get(parts[0]);
+                    System.out.println("Identified month: " + monthName);
+                    
+                    // Check if there's a year
+                    if (parts.length > 1) {
+                        year = parts[1];
+                        System.out.println("Identified year: " + year);
+                    }
+                }
+                
+                if (monthName != null) {
+                    // Create a Calendar instance
+                    Calendar cal = Calendar.getInstance();
+                    
+                    // Set the year (use current year if not specified)
+                    if (year != null) {
+                        cal.set(Calendar.YEAR, Integer.parseInt(year));
+                    }
+                    
+                    // Set the month (Calendar months are 0-based)
+                    String[] months = {"January", "February", "March", "April", "May", "June", 
+                                     "July", "August", "September", "October", "November", "December"};
+                    for (int i = 0; i < months.length; i++) {
+                        if (months[i].equals(monthName)) {
+                            cal.set(Calendar.MONTH, i);
+                            break;
+                        }
+                    }
+                    
+                    // Set to first day of month
+                    cal.set(Calendar.DAY_OF_MONTH, 1);
+                    String startDate = new SimpleDateFormat("yyyy-MM-dd").format(cal.getTime());
+                    
+                    // Set to last day of month
+                    cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH));
+                    String endDate = new SimpleDateFormat("yyyy-MM-dd").format(cal.getTime());
+                    
+                    datePattern = startDate + "|" + endDate;
+                    System.out.println("Created date range: " + datePattern);
+                } else {
+                    // If not a month, try other date formats
+                String[] dateFormats = {
+                    "MMMM d, yyyy",  // May 29, 2025
+                    "MMM d, yyyy",   // May 29, 2025
+                    "MMMM d yyyy",   // May 29 2025
+                    "MMM d yyyy",    // May 29 2025
+                    "yyyy-MM-dd"     // 2025-05-29
+                };
+                
+                    System.out.println("Attempting to parse as specific date...");
+                for (String format : dateFormats) {
+                    try {
+                            System.out.println("Trying format: " + format);
+                        SimpleDateFormat sdf = new SimpleDateFormat(format);
+                        sdf.setLenient(false);
+                            java.util.Date date = sdf.parse(processedQuery);
+                        datePattern = new SimpleDateFormat("yyyy-MM-dd").format(date);
+                            System.out.println("Successfully parsed as single date: " + datePattern);
+                        break;
+                    } catch (Exception e) {
+                            System.out.println("Failed to parse with format " + format + ": " + e.getMessage());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("Date parsing failed: " + e.getMessage());
+            }
+            
+            System.out.println("Final date pattern: " + datePattern);
+            
+            // Now execute the main search query
+            try (PreparedStatement pstmt = conn.prepareStatement("""
+                SELECT r.*, b.title, u.username,
+                       CASE 
+                           WHEN r.return_date IS NULL AND r.due_date < datetime('now') 
+                           THEN (julianday('now') - julianday(r.due_date) - 1) * ?
+                           WHEN r.return_date > r.due_date
+                           THEN (julianday(r.return_date) - julianday(r.due_date) - 1) * ?
+                           ELSE 0
+                       END as calculated_fee,
+                       CASE 
+                           WHEN r.return_date IS NOT NULL THEN 'Returned'
+                           ELSE 'Active'
+                       END as rental_status
                 FROM rentals r 
-                JOIN books b ON r.book_id = b.id 
+                JOIN books b ON r.book_id = b.book_id 
                 JOIN users u ON r.user_id = u.id
-                WHERE b.title LIKE ? OR u.full_name LIKE ?
+                WHERE LOWER(b.title) LIKE LOWER(?)
+                   OR LOWER(u.username) LIKE LOWER(?)
+                   OR r.id LIKE ?
+                   OR LOWER(CASE 
+                           WHEN r.return_date IS NOT NULL THEN 'Returned'
+                           ELSE 'Active'
+                        END) LIKE LOWER(?)
+                   OR LOWER(r.payment_status) LIKE LOWER(?)
+                   OR CAST(calculated_fee AS TEXT) LIKE ?
+                   OR CAST(ROUND(calculated_fee, 2) AS TEXT) LIKE ?
+                   OR (? IS NOT NULL AND (
+                       strftime('%Y-%m', r.rental_date) = strftime('%Y-%m', ?)
+                       OR strftime('%Y-%m', r.due_date) = strftime('%Y-%m', ?)
+                       OR strftime('%Y-%m', r.return_date) = strftime('%Y-%m', ?)
+                   ))
                 ORDER BY r.rental_date DESC
              """)) {
             
             String searchPattern = "%" + query + "%";
-            pstmt.setString(1, searchPattern);
-            pstmt.setString(2, searchPattern);
-            
+                System.out.println("Search pattern: " + searchPattern);
+                
+                pstmt.setDouble(1, lateFeeRate);
+                pstmt.setDouble(2, lateFeeRate);
+                pstmt.setString(3, searchPattern);
+                pstmt.setString(4, searchPattern);
+                pstmt.setString(5, searchPattern);
+                pstmt.setString(6, searchPattern);
+                pstmt.setString(7, searchPattern);
+                pstmt.setString(8, searchPattern);
+                pstmt.setString(9, searchPattern);
+                pstmt.setString(10, datePattern);
+                
+                if (datePattern != null) {
+                    if (datePattern.contains("|")) {
+                        String[] dates = datePattern.split("\\|");
+                        System.out.println("Using date range: " + dates[0] + " to " + dates[1]);
+                        // Use the start date for month comparison
+                        pstmt.setString(11, dates[0]);
+                        pstmt.setString(12, dates[0]);
+                        pstmt.setString(13, dates[0]);
+                    } else {
+                        System.out.println("Using single date: " + datePattern);
+                        pstmt.setString(11, datePattern);
+                        pstmt.setString(12, datePattern);
+                        pstmt.setString(13, datePattern);
+                    }
+                } else {
+                    pstmt.setString(11, null);
+                    pstmt.setString(12, null);
+                    pstmt.setString(13, null);
+                }
+                
+                System.out.println("Executing SQL query...");
             ResultSet rs = pstmt.executeQuery();
             rentalsModel.setRowCount(0);
             
+                int rowCount = 0;
+                SimpleDateFormat displayFormat = new SimpleDateFormat("MMM dd, yyyy hh:mm a");
+                SimpleDateFormat parseFormat = new SimpleDateFormat("yyyy-MM-dd");
+                
             while (rs.next()) {
+                    rowCount++;
+                    String rentalDateStr = rs.getString("rental_date");
+                    String dueDateStr = rs.getString("due_date");
+                    String returnDateStr = rs.getString("return_date");
+                    double lateFee = rs.getDouble("calculated_fee");
+                    String status = rs.getString("rental_status");
+                    
+                    System.out.println("Found rental: ID=" + rs.getInt("id") + 
+                                     ", Date=" + rentalDateStr + 
+                                     ", Due=" + dueDateStr + 
+                                     ", Return=" + returnDateStr);
+                    
+                    // Format dates
+                    String formattedRentalDate = "";
+                    String formattedDueDate = "";
+                    String formattedReturnDate = "";
+                    
+                    try {
+                        if (rentalDateStr != null) {
+                            java.util.Date date = parseFormat.parse(rentalDateStr);
+                            formattedRentalDate = displayFormat.format(date);
+                        }
+                        if (dueDateStr != null) {
+                            java.util.Date date = parseFormat.parse(dueDateStr);
+                            formattedDueDate = displayFormat.format(date);
+                        }
+                        if (returnDateStr != null) {
+                            java.util.Date date = parseFormat.parse(returnDateStr);
+                            formattedReturnDate = displayFormat.format(date);
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Error formatting dates: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                    
                 Object[] row = {
                     rs.getInt("id"),
                     rs.getString("title"),
-                    rs.getString("full_name"),
-                    rs.getString("rental_date"),
-                    rs.getString("due_date"),
-                    rs.getString("return_date"),
-                    rs.getString("status"),
-                    calculateLateFee(rs.getString("due_date"), rs.getString("return_date"))
+                        rs.getString("username"),
+                        formattedRentalDate,
+                        formattedDueDate,
+                        formattedReturnDate,
+                        status,
+                        rs.getString("payment_status"),
+                        String.format("₱%.2f", lateFee)
                 };
                 rentalsModel.addRow(row);
             }
+                
+                System.out.println("Found " + rowCount + " matching records");
+                System.out.println("=== Search Complete ===\n");
+                
+            }
         } catch (SQLException e) {
+            System.out.println("SQL Error: " + e.getMessage());
+                e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error searching rentals: " + e.getMessage());
         }
     }
@@ -1882,7 +2666,7 @@ public class AdminDashboard extends JFrame {
         if (returnDate == null) {
             // If book is not returned yet, calculate based on current date
             try {
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
                 java.util.Date due = sdf.parse(dueDate);
                 java.util.Date now = new java.util.Date();
                 
@@ -1899,7 +2683,7 @@ public class AdminDashboard extends JFrame {
         }
         
         try {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
             java.util.Date due = sdf.parse(dueDate);
             java.util.Date returned = sdf.parse(returnDate);
             

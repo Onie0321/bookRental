@@ -88,11 +88,11 @@ public class RentalPanel extends BasePanel {
         JPanel historyPanel = new JPanel(new BorderLayout());
         historyPanel.setBorder(BorderFactory.createTitledBorder("My Rentals"));
         
-        String[] rentalColumns = {"Book ID", "Title", "Rental Date", "Due Date", "Status", "Action"};
+        String[] rentalColumns = {"Book ID", "Title", "Rental Date", "Due Date", "Status", "Payment Status", "Action"};
         rentalTableModel = new DefaultTableModel(rentalColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 5; // Only action column is editable
+                return column == 5 || column == 6; // Payment Status and Action columns are editable
             }
         };
         
@@ -100,9 +100,14 @@ public class RentalPanel extends BasePanel {
         rentalTable.setRowHeight(30);
         
         // Add button column to rental table
-        TableColumn returnButtonColumn = rentalTable.getColumnModel().getColumn(5);
+        TableColumn returnButtonColumn = rentalTable.getColumnModel().getColumn(6);
         returnButtonColumn.setCellRenderer(new ButtonRenderer());
         returnButtonColumn.setCellEditor(new ButtonEditor(new JCheckBox()));
+        
+        // Add payment status column renderer and editor
+        TableColumn paymentStatusColumn = rentalTable.getColumnModel().getColumn(5);
+        paymentStatusColumn.setCellRenderer(new PaymentStatusRenderer());
+        paymentStatusColumn.setCellEditor(new PaymentStatusEditor(new JComboBox<>(new String[]{"pending", "paid"})));
         
         JScrollPane rentalScrollPane = new JScrollPane(rentalTable);
         historyPanel.add(rentalScrollPane, BorderLayout.CENTER);
@@ -187,6 +192,7 @@ public class RentalPanel extends BasePanel {
                         rs.getString("rental_date"),
                         rs.getString("due_date"),
                         rs.getString("status"),
+                        rs.getString("payment_status"),
                         "Return"
                     };
                     rentalTableModel.addRow(row);
@@ -422,5 +428,63 @@ public class RentalPanel extends BasePanel {
     public void setCurrentUserId(int userId) {
         this.currentUserId = userId;
         loadData(); // Load data for the new user
+    }
+}
+
+class PaymentStatusRenderer extends DefaultTableCellRenderer {
+    @Override
+    public Component getTableCellRendererComponent(JTable table, Object value,
+            boolean isSelected, boolean hasFocus, int row, int column) {
+        Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+        
+        if (!isSelected) {
+            String status = value.toString();
+            if ("paid".equals(status)) {
+                c.setForeground(new Color(46, 204, 113)); // Green
+            } else {
+                c.setForeground(new Color(231, 76, 60));  // Red
+            }
+        }
+        return c;
+    }
+}
+
+class PaymentStatusEditor extends DefaultCellEditor {
+    private JComboBox<String> comboBox;
+    
+    public PaymentStatusEditor(JComboBox<String> comboBox) {
+        super(comboBox);
+        this.comboBox = comboBox;
+    }
+    
+    @Override
+    public Component getTableCellEditorComponent(JTable table, Object value,
+            boolean isSelected, int row, int column) {
+        comboBox.setSelectedItem(value);
+        return comboBox;
+    }
+    
+    @Override
+    public Object getCellEditorValue() {
+        String newStatus = (String) comboBox.getSelectedItem();
+        JTable table = (JTable) comboBox.getParent();
+        int row = table.getSelectedRow();
+        int rentalId = (int) table.getValueAt(row, 0);
+        
+        // Update payment status in database
+        try (Connection conn = DatabaseManager.getInstance().getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(
+                 "UPDATE rentals SET payment_status = ? WHERE id = ?")) {
+            pstmt.setString(1, newStatus);
+            pstmt.setInt(2, rentalId);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(null,
+                "Error updating payment status: " + e.getMessage(),
+                "Database Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+        
+        return newStatus;
     }
 } 

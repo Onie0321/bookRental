@@ -152,10 +152,21 @@ public class DatabaseManager {
                 "return_date TEXT," +
                 "late_fee REAL DEFAULT 0.0," +
                 "status TEXT DEFAULT 'Active'," +
+                "payment_status TEXT DEFAULT 'pending'," +
                 "FOREIGN KEY (user_id) REFERENCES users(id)," +
                 "FOREIGN KEY (book_id) REFERENCES books(book_id)," +
                 "FOREIGN KEY (staff_id) REFERENCES users(id)" +
                 ")");
+            
+            // Check if payment_status column exists in rentals table
+            try {
+                stmt.execute("SELECT payment_status FROM rentals LIMIT 1");
+            } catch (SQLException e) {
+                if (e.getMessage().contains("no such column")) {
+                    // Add payment_status column if it doesn't exist
+                    stmt.execute("ALTER TABLE rentals ADD COLUMN payment_status TEXT DEFAULT 'pending'");
+                }
+            }
             
             // Create reservations table
             stmt.execute("CREATE TABLE IF NOT EXISTS reservations (" +

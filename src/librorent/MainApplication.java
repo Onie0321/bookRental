@@ -11,6 +11,9 @@ public class MainApplication extends JFrame {
     private CardLayout cardLayout;
     private DatabaseManager dbManager;
     private int currentUserId;
+    private boolean isExpanded = false;
+    private static final int COLLAPSED_WIDTH = 60;
+    private static final int EXPANDED_WIDTH = 250;
     
     public MainApplication(int userId) {
         this.currentUserId = userId;
@@ -80,26 +83,43 @@ public class MainApplication extends JFrame {
     
     private void createSidebar() {
         sidebar = new JPanel();
-        sidebar.setPreferredSize(new Dimension(250, 0));
+        sidebar.setPreferredSize(new Dimension(COLLAPSED_WIDTH, 0));
         sidebar.setBackground(new Color(51, 51, 51));
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
         
-        // Add logo/header
-        JLabel headerLabel = new JLabel("LibroRent");
-        headerLabel.setFont(new Font("Arial", Font.BOLD, 24));
-        headerLabel.setForeground(Color.WHITE);
-        headerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        headerLabel.setBorder(BorderFactory.createEmptyBorder(20, 0, 20, 0));
-        sidebar.add(headerLabel);
+        // Add hamburger menu button
+        JButton hamburgerButton = new JButton("☰");
+        hamburgerButton.setFont(new Font("Arial Unicode MS", Font.PLAIN, 24));
+        hamburgerButton.setForeground(Color.WHITE);
+        hamburgerButton.setBackground(new Color(51, 51, 51));
+        hamburgerButton.setBorderPainted(false);
+        hamburgerButton.setFocusPainted(false);
+        hamburgerButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        hamburgerButton.setMaximumSize(new Dimension(COLLAPSED_WIDTH, 40));
+        hamburgerButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
-        // Add menu items
-        addMenuItem("👤 My Dashboard", "DASHBOARD");
-        addMenuItem("📚 Book Listing", "BOOK_LISTING");
+        // Add hover effect for hamburger
+        hamburgerButton.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                hamburgerButton.setBackground(new Color(70, 70, 70));
+            }
+            public void mouseExited(MouseEvent e) {
+                hamburgerButton.setBackground(new Color(51, 51, 51));
+            }
+        });
         
-        addMenuItem("📖 Rental & Return", "RENTAL_RETURN");
-        addMenuItem("⏰ Reservations", "RESERVATION");
-        addMenuItem("💰 Late Fees", "LATE_FEE");
-       
+        // Add toggle action
+        hamburgerButton.addActionListener(e -> toggleSidebar());
+        
+        sidebar.add(hamburgerButton);
+        sidebar.add(Box.createVerticalStrut(20));
+        
+        // Add menu items with proper icons
+        addMenuItem("📊", "My Dashboard", "DASHBOARD");
+        addMenuItem("📚", "Book Listing", "BOOK_LISTING");
+        addMenuItem("📖", "Rental & Return", "RENTAL_RETURN");
+        addMenuItem("⏰", "Reservations", "RESERVATION");
+        addMenuItem("💰", "Late Fees", "LATE_FEE");
         
         // Add some spacing
         sidebar.add(Box.createVerticalGlue());
@@ -107,19 +127,19 @@ public class MainApplication extends JFrame {
         // Add divider
         JSeparator divider = new JSeparator(JSeparator.HORIZONTAL);
         divider.setForeground(new Color(100, 100, 100));
-        divider.setMaximumSize(new Dimension(230, 1));
+        divider.setMaximumSize(new Dimension(COLLAPSED_WIDTH - 10, 1));
         sidebar.add(divider);
         sidebar.add(Box.createVerticalStrut(10));
         
         // Add logout button
-        JButton logoutButton = new JButton("🚪 Logout");
-        logoutButton.setFont(new Font("Arial", Font.PLAIN, 14));
+        JButton logoutButton = new JButton("🚪");
+        logoutButton.setFont(new Font("Arial Unicode MS", Font.PLAIN, 15));
         logoutButton.setForeground(Color.WHITE);
         logoutButton.setBackground(new Color(51, 51, 51));
         logoutButton.setBorderPainted(false);
         logoutButton.setFocusPainted(false);
         logoutButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-        logoutButton.setMaximumSize(new Dimension(230, 40));
+        logoutButton.setMaximumSize(new Dimension(COLLAPSED_WIDTH - 10, 40));
         logoutButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
         // Add hover effect
@@ -149,15 +169,72 @@ public class MainApplication extends JFrame {
         sidebar.add(Box.createVerticalStrut(10));
     }
     
-    private void addMenuItem(String text, String cardName) {
-        JButton menuItem = new JButton(text);
-        menuItem.setFont(new Font("Arial", Font.PLAIN, 14));
+    private void toggleSidebar() {
+        isExpanded = !isExpanded;
+        int newWidth = isExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
+        
+        // Update sidebar width
+        sidebar.setPreferredSize(new Dimension(newWidth, 0));
+        
+        // Update all menu items
+        for (Component comp : sidebar.getComponents()) {
+            if (comp instanceof JButton) {
+                JButton button = (JButton) comp;
+                // Skip hamburger button and handle it separately
+                if (button == sidebar.getComponent(0)) {
+                    button.setMaximumSize(new Dimension(newWidth, 40));
+                    continue;
+                }
+                
+                // Handle logout button separately
+                if (button == sidebar.getComponent(sidebar.getComponentCount() - 2)) {
+                    button.setMaximumSize(new Dimension(newWidth - 10, 40));
+                    continue;
+                }
+                
+                // Handle regular menu items
+                Object fullText = button.getClientProperty("fullText");
+                if (fullText != null) {
+                    if (isExpanded) {
+                        // Show full text
+                        String icon = button.getText();
+                        button.setText(icon + " " + fullText.toString());
+                        button.setMaximumSize(new Dimension(EXPANDED_WIDTH - 10, 40));
+                        button.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    } else {
+                        // Show only icon
+                        String icon = button.getText().split(" ")[0];
+                        button.setText(icon);
+                        button.setMaximumSize(new Dimension(COLLAPSED_WIDTH - 10, 40));
+                        button.setAlignmentX(Component.CENTER_ALIGNMENT);
+                    }
+                }
+            }
+        }
+        
+        // Update divider width
+        for (Component comp : sidebar.getComponents()) {
+            if (comp instanceof JSeparator) {
+                JSeparator divider = (JSeparator) comp;
+                divider.setMaximumSize(new Dimension(newWidth - 10, 1));
+            }
+        }
+        
+        // Repaint and revalidate
+        sidebar.revalidate();
+        sidebar.repaint();
+    }
+    
+    private void addMenuItem(String icon, String text, String cardName) {
+        JButton menuItem = new JButton(icon);
+        menuItem.putClientProperty("fullText", text);
+        menuItem.setFont(new Font("Arial Unicode MS", Font.PLAIN, 20));
         menuItem.setForeground(Color.WHITE);
         menuItem.setBackground(new Color(51, 51, 51));
         menuItem.setBorderPainted(false);
         menuItem.setFocusPainted(false);
         menuItem.setAlignmentX(Component.CENTER_ALIGNMENT);
-        menuItem.setMaximumSize(new Dimension(230, 40));
+        menuItem.setMaximumSize(new Dimension(COLLAPSED_WIDTH - 10, 40));
         menuItem.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
         // Add hover effect
